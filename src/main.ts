@@ -12,7 +12,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    rawBody: true,
+    rawBody: true,  // allowing access to rawbodies usefull for stripe webhooks
   });
   const configService = app.get(ConfigService);
 

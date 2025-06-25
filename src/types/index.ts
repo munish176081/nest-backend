@@ -1,4 +1,4 @@
-import { TokenData } from 'src/utils/createUserTokenData';
+import { TokenData } from "src/helpers/createUserTokenData";
 
 declare module 'express-session' {
   interface SessionData {

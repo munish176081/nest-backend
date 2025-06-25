@@ -7,6 +7,11 @@ enum Environment {
   Test = 'test',
 }
 
+enum EmailServiceType {
+  SendGrid = 'sendgrid',
+  SMTP = 'smtp',
+}
+
 export const configValidationSchema = Joi.object({
   NODE_ENV: Joi.string().valid(...Object.values(Environment)),
   DATABASE_URL: Joi.string().required(),
@@ -20,8 +25,48 @@ export const configValidationSchema = Joi.object({
   FACEBOOK_CLIENT_ID: Joi.string().required(),
   FACEBOOK_CLIENT_SECRET: Joi.string().required(),
 
-  SENDGRID_API_KEY: Joi.string().required(),
-  SENDGRID_EMAIL: Joi.string().required(),
+  // Email Configuration
+  EMAIL_SERVICE_TYPE: Joi.string().valid(...Object.values(EmailServiceType)).required(),
+  
+  // SendGrid Configuration
+  SENDGRID_API_KEY: Joi.string().when('EMAIL_SERVICE_TYPE', {
+    is: EmailServiceType.SendGrid,
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+  SENDGRID_EMAIL: Joi.string().when('EMAIL_SERVICE_TYPE', {
+    is: EmailServiceType.SendGrid,
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+
+  // SMTP Configuration
+  SMTP_HOST: Joi.string().when('EMAIL_SERVICE_TYPE', {
+    is: EmailServiceType.SMTP,
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+  SMTP_PORT: Joi.number().when('EMAIL_SERVICE_TYPE', {
+    is: EmailServiceType.SMTP,
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+  SMTP_USER: Joi.string().when('EMAIL_SERVICE_TYPE', {
+    is: EmailServiceType.SMTP,
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+  SMTP_PASSWORD: Joi.string().when('EMAIL_SERVICE_TYPE', {
+    is: EmailServiceType.SMTP,
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+  SMTP_FROM_EMAIL: Joi.string().when('EMAIL_SERVICE_TYPE', {
+    is: EmailServiceType.SMTP,
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+  SMTP_SECURE: Joi.boolean().default(true),
 
   SESSION_SECRET: Joi.string().required(),
   COOKIE_DOMAIN: Joi.string().optional(),
@@ -46,9 +91,20 @@ export const configConfiguration = () => {
       clientId: process.env.FACEBOOK_CLIENT_ID,
       clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
     },
-    sendgrid: {
-      apiKey: process.env.SENDGRID_API_KEY,
-      email: process.env.SENDGRID_EMAIL,
+    email: {
+      serviceType: process.env.EMAIL_SERVICE_TYPE,
+      sendgrid: {
+        apiKey: process.env.SENDGRID_API_KEY,
+        email: process.env.SENDGRID_EMAIL,
+      },
+      smtp: {
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        user: process.env.SMTP_USER,
+        password: process.env.SMTP_PASSWORD,
+        fromEmail: process.env.SMTP_FROM_EMAIL,
+        secure: process.env.SMTP_SECURE === 'true',
+      },
     },
     session: {
       name: 'token',
@@ -58,7 +114,6 @@ export const configConfiguration = () => {
       cookie: {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         secure: process.env.CLOUD_PROVIDER ? true : 'auto',
-        // domain: process.env.COOKIE_DOMAIN || '/',
         sameSite: process.env.CLOUD_PROVIDER ? 'none' : 'lax',
         proxy: true,
       },
