@@ -11,14 +11,14 @@ import { Request } from 'express';
 import { UserDto } from './dto/user.dto';
 import { UserListings } from './dto/listings.dto';
 import { UsersService } from './users.service';
-import { ListingsService } from '../marketplace/marketplace.service';
+// import { ListingsService } from '../marketplace/marketplace.service';
 import { LoggedInGuard } from 'src/middleware/LoggedInGuard';
 import { Serialize } from 'src/transformers/serialize.interceptor';
 
 @Controller('users')
 export class UsersController {
   constructor(
-    private readonly listingsService: ListingsService,
+    // private readonly listingsService: ListingsService,
     private readonly usersService: UsersService,
   ) {}
 
@@ -33,9 +33,9 @@ export class UsersController {
   @Serialize(UserListings)
   @Get('/listings')
   async getUserListings(@Req() req: Request) {
-    const listings = await this.listingsService.getUserListings(req.user.id);
+    // const listings = await this.listingsService.getUserListings(req.user.id);
 
-    return listings;
+    // return listings;
   }
 
   @UseGuards(LoggedInGuard)
@@ -45,9 +45,9 @@ export class UsersController {
     @Req() req: Request,
     @Param('id', new ParseUUIDPipe()) id: string,
   ) {
-    const listing = await this.listingsService.getUserListing(req.user.id, id);
+    // const listing = await this.listingsService.getUserListing(req.user.id, id);
 
-    return listing;
+    // return listing;
   }
 
   // Test endpoint to manually trigger session refresh

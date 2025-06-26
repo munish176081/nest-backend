@@ -1,5 +1,5 @@
 import { ExternalAuthAccount } from 'src/features/authentication/entities/external-auth-accounts.entity';
-import { Listing } from 'src/features/marketplace/entities/product.entity';
+// import { Listing } from 'src/features/marketplace/entities/product.entity';
 import {
   Column,
   CreateDateColumn,
@@ -40,8 +40,8 @@ export class User {
   )
   externalAccounts: ExternalAuthAccount[];
 
-  @OneToMany(() => Listing, (listing) => listing.user)
-  listings: Listing[];
+  // @OneToMany(() => Listing, (listing) => listing.user)
+  // listings: Listing[];
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: string;
