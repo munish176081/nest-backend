@@ -38,6 +38,7 @@ export class EmailService {
       templateId,
       dynamicTemplateData,
     };
-    await this.sendGridClient.send(mail);
+    console.log("DYNMAIC TEMPLATE DATA", dynamicTemplateData);
+    // await this.sendGridClient.send(mail);
   }
 }
