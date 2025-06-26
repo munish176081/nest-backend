@@ -54,7 +54,10 @@ async function bootstrap() {
   // serve static files
   app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
 
-  await app.listen(configService.get('appPort'));
+  await app.listen(
+    configService.get('appPort'),
+    '0.0.0.0'
+  );
 }
 
 bootstrap();
