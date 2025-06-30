@@ -4,6 +4,8 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { AuthService } from '../authentication.service';
+import { createUserTokenData } from 'src/helpers/createUserTokenData';
+import { parseIpFromReq } from 'src/helpers/parseIpFromReq';
 
 @Injectable()
 export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
@@ -18,6 +20,7 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
       scope: ['email', 'public_profile'],
       state: true,
       passReqToCallback: true,
+      profileFields:['id', 'email', 'gender', 'link' , 'verified']
     });
   }
 
@@ -29,9 +32,28 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
     done: any,
   ) {
     // TODO: handle profile creation
-    done('Not implemented');
+    const email = profile._json.email;
+    console.log(email)
+    if (!email) {
+      done(null, false, { message: 'Email not verified' });
+      return;
+    }
 
     try {
+      const account = await this.authService.createOrGetAccount({
+        externalId: profile.id,
+        provider: 'facebook',
+        userData: {
+          email,
+          imageUrl: profile._json.picture,
+          ip: parseIpFromReq(req),
+          firstName: profile._json.given_name,
+          lastName: profile._json.family_name,
+        },
+        raw: profile._json,
+      });
+
+      done(null, createUserTokenData(account.user));
     } catch (err) {
       let message = 'Something went wrong';
 
