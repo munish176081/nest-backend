@@ -84,6 +84,7 @@ export class AuthService {
       },
       relations: { user: true },
     });
+    console.log(account.user, account, "ACCOUNT")
 
     if (!account) {
       account = this.externalAuthAccountRepo.create({

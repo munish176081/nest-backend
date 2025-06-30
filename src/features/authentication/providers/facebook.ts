@@ -20,7 +20,9 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
       scope: ['email', 'public_profile'],
       state: true,
       passReqToCallback: true,
-      profileFields:['id', 'email', 'gender', 'link' , 'verified']
+      profileFields:['id', 'email', 'gender', 'link' , 'verified'],
+      timeout: configService.get('oauthTimeout') || 30000,
+      proxy: false,
     });
   }
 
@@ -35,7 +37,7 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
     const email = profile._json.email;
     console.log(email)
     if (!email) {
-      done(null, false, { message: 'Email not verified' });
+      done(null, false, { message: 'Email not connected to Facebook' });
       return;
     }
 

@@ -54,6 +54,14 @@ async function bootstrap() {
   // serve static files
   app.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
 
+  // Set global HTTP timeout for external API calls
+  const http = require('http');
+  const https = require('https');
+  
+  // Increase timeout for HTTP requests
+  http.globalAgent.options.timeout = 30000; // 30 seconds
+  https.globalAgent.options.timeout = 30000; // 30 seconds
+
   await app.listen(
     configService.get('appPort'),
     '0.0.0.0'

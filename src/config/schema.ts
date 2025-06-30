@@ -25,6 +25,9 @@ export const configValidationSchema = Joi.object({
   FACEBOOK_CLIENT_ID: Joi.string().required(),
   FACEBOOK_CLIENT_SECRET: Joi.string().required(),
 
+  // OAuth Timeout Configuration
+  OAUTH_TIMEOUT: Joi.number().default(30000), // 30 seconds default
+
   // Email Configuration
   EMAIL_SERVICE_TYPE: Joi.string().valid(...Object.values(EmailServiceType)).required(),
   
@@ -71,9 +74,8 @@ export const configValidationSchema = Joi.object({
   SESSION_SECRET: Joi.string().required(),
   COOKIE_DOMAIN: Joi.string().optional(),
 
-  PORT: Joi.number().optional(),
-  STRIPE_SECRET_KEY: Joi.string(),
-  STRIPE_WEBHOOK_SECRET: Joi.string(),
+  // Cloud Provider
+  CLOUD_PROVIDER: Joi.string().optional(),
 });
 
 export const configConfiguration = () => {
@@ -83,6 +85,7 @@ export const configConfiguration = () => {
     dbUrl: process.env.DATABASE_URL,
     siteUrl: process.env.SITE_URL,
     apiUrl: process.env.API_URL,
+    oauthTimeout: parseInt(process.env.OAUTH_TIMEOUT || '30000'),
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
