@@ -29,14 +29,14 @@ import { EmailModule } from './features/email/email.module';
           logging: !isProduction,
     
           // ✅ Final working setup: one ssl object only
-          ssl: {
-            rejectUnauthorized: false,
-          },
-          extra: {
-            ssl: {
-              rejectUnauthorized: false,
-            },
-          },
+          // ssl: {
+          //   rejectUnauthorized: false,
+          // },
+          // extra: {
+          //   ssl: {
+          //     rejectUnauthorized: false,
+          //   },
+          // },
         };
       },
     }),

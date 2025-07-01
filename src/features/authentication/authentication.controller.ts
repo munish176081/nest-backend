@@ -199,6 +199,22 @@ export class AuthController {
         `Failed to reset password for email ${forgotPasswordBody.email} error: ${error}`,
       );
 
+      // Check if it's a known error with a specific message
+      if (error?.response?.data?.message) {
+        throw new BadRequestException(error.response.data.message);
+      }
+
+      // Check if it's a validation error
+      if (error?.status === 400) {
+        throw new BadRequestException(error.message || 'Invalid request data');
+      }
+
+      // If the error has a message, return it
+      if (error?.message) {
+        throw new InternalServerErrorException(error.message);
+      }
+
+      // For other errors, throw a generic message
       throw new InternalServerErrorException(
         'Failed to reset password! Please make sure you entered a valid email and have a password setup.',
       );

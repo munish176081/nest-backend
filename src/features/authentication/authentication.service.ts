@@ -366,7 +366,7 @@ export class AuthService {
       templateId: sendGridEmailTemplates.emailVerificationWithOtp,
       recipient: user.email,
       dynamicTemplateData: {
-        username: user.username,
+        username: user.name,
         otp: otp,
         verificationUrl: `${this.configService.get('apiUrl')}/api/v1/auth/verify-email-otp`,
       },
