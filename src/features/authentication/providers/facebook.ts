@@ -20,7 +20,7 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
       scope: ['email', 'public_profile'],
       state: true,
       passReqToCallback: true,
-      profileFields: ['id', 'email', 'gender', 'link', 'verified', 'name', 'first_name', 'last_name', 'picture'],
+      profileFields: 'id,email,gender,link,verified,name,picture',
       timeout: configService.get('oauthTimeout') || 30000,
       proxy: false,
     });
@@ -35,7 +35,7 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
     done: any,
   ) {
     const email = profile._json.email;
-    
+
     if (!email) {
       done(null, false, { message: 'Email not connected to Facebook' });
       return;
@@ -46,17 +46,15 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
         id: profile.id,
         email: profile._json.email,
         name: profile._json.name,
-        first_name: profile._json.first_name,
-        last_name: profile._json.last_name,
-        given_name: profile._json.given_name,
-        family_name: profile._json.family_name,
         picture: profile._json.picture,
         picture_data: profile._json.picture?.data,
       });
 
-      // Facebook might provide name fields in different formats
-      const firstName = profile._json.first_name || profile._json.given_name || '';
-      const lastName = profile._json.last_name || profile._json.family_name || '';
+      // Parse name from the full name field since first_name and last_name are causing issues
+      const fullName = profile._json.name || '';
+      const nameParts = fullName.split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
       const imageUrl = profile._json.picture?.data?.url || profile._json.picture;
 
       const account = await this.authService.createOrGetAccount({
