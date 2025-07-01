@@ -14,49 +14,37 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
     private readonly configService: ConfigService,
   ) {
     super({
-      clientID: configService.get('facebook.clientId'),
-      clientSecret: configService.get('facebook.clientSecret'),
-      callbackURL: `${configService.get('apiUrl')}/api/v1/auth/facebook/callback`,
+      clientID: configService.getOrThrow<string>('facebook.clientId'),
+      clientSecret: configService.getOrThrow<string>('facebook.clientSecret'),
+      callbackURL: `${configService.getOrThrow<string>('apiUrl')}/api/v1/auth/facebook/callback`,
       scope: ['email', 'public_profile'],
       state: true,
       passReqToCallback: true,
-      profileFields: 'id,email,gender,link,verified,name,picture',
-      timeout: configService.get('oauthTimeout') || 30000,
+      profileFields: ['id', 'emails', 'gender', 'link', 'verified', 'name', 'picture'],
+      timeout: parseInt(configService.get('oauthTimeout') || '30000', 10),
       proxy: false,
     });
-    console.log('Facebook OAuth configured with client ID:', configService.get('facebook.clientId') ? 'configured' : 'not configured');
   }
 
   async validate(
     req: Request,
-    _accessToken: string,
-    _refreshToken: string,
+    accessToken: string,
+    refreshToken: string,
     profile: Profile,
-    done: any,
+    done: (error: Error | null, user?: any, info?: any) => void,
   ) {
-    const email = profile._json.email;
-
-    if (!email) {
-      done(null, false, { message: 'Email not connected to Facebook' });
-      return;
-    }
-
     try {
-      console.log('Facebook profile:', {
-        id: profile.id,
-        email: profile._json.email,
-        name: profile._json.name,
-        picture: profile._json.picture,
-        picture_data: profile._json.picture?.data,
-      });
+      // Validate email presence
+      const email = this.getEmailFromProfile(profile);
+      if (!email) {
+        return done(null, false, { message: 'No verified email associated with Facebook account' });
+      }
 
-      // Parse name from the full name field since first_name and last_name are causing issues
-      const fullName = profile._json.name || '';
-      const nameParts = fullName.split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
-      const imageUrl = profile._json.picture?.data?.url || profile._json.picture;
+      // Parse name components safely
+      const { firstName, lastName } = this.parseName(profile);
+      const imageUrl = this.getProfileImage(profile);
 
+      // Create or retrieve account
       const account = await this.authService.createOrGetAccount({
         externalId: profile.id,
         provider: 'facebook',
@@ -70,18 +58,53 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
         raw: profile._json,
       });
 
-      console.log('Account created/retrieved:', account);
-      console.log('User data:', account.user);
+      return done(null, createUserTokenData(account.user));
+    } catch (error) {
+      this.handleValidationError(error, done);
+    }
+  }
 
-      done(null, createUserTokenData(account.user));
-    } catch (err) {
-      let message = 'Something went wrong';
+  private getEmailFromProfile(profile: Profile): string | null {
+    return (
+      profile?.emails?.[0]?.value || 
+      profile?._json?.email || 
+      null
+    );
+  }
 
-      if (err.status?.toString()?.startsWith('4') && err.message) {
-        message = err.message;
-      }
+  private parseName(profile: Profile): { firstName: string; lastName: string } {
+    const nameParts = (profile?.displayName || profile?._json?.name || '').trim().split(/\s+/);
+    return {
+      firstName: nameParts[0] || '',
+      lastName: nameParts.slice(1).join(' ') || '',
+    };
+  }
 
-      done(null, false, { message });
+  private getProfileImage(profile: Profile): string | undefined {
+    return (
+      profile?._json?.picture?.data?.url ||
+      profile?.photos?.[0]?.value ||
+      undefined
+    );
+  }
+
+  private handleValidationError(
+    error: any,
+    done: (error: Error | null, user?: any, info?: any) => void,
+  ) {
+    const errorMessage = error.response?.data?.message || error.message;
+    
+    if (error.status?.toString()?.startsWith('4')) {
+      // Client-side errors (4xx)
+      return done(null, false, {
+        message: errorMessage || 'Authentication rejected due to invalid data',
+      });
+    } else {
+      // Server-side errors (5xx)
+      console.error('Facebook auth error:', error);
+      return done(null, false, {
+        message: errorMessage || 'Temporary authentication service disruption',
+      });
     }
   }
 }
