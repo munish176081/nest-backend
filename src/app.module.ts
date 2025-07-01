@@ -17,25 +17,28 @@ import { EmailModule } from './features/email/email.module';
     ConfigModule.forRoot(configOptions),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        url: configService.get('dbUrl'),
-        synchronize: true,
-        entities: [
-          ExternalAuthAccount,
-          User,
-        ],
-        namingStrategy: new SnakeCaseNamingStrategy(),
-        logging: configService.get('env') === 'development',
-        ssl: configService.get('env') === 'production',
-        extra: {
-          ...(configService.get('env') === 'production' && {
+      useFactory: (configService: ConfigService) => {
+        const isProduction = configService.get('NODE_ENV') === 'production';
+    
+        return {
+          type: 'postgres',
+          url: configService.get('dbUrl'),
+          synchronize: true,
+          entities: [ExternalAuthAccount, User],
+          namingStrategy: new SnakeCaseNamingStrategy(),
+          logging: !isProduction,
+    
+          // ✅ Final working setup: one ssl object only
+          ssl: {
+            rejectUnauthorized: false,
+          },
+          extra: {
             ssl: {
               rejectUnauthorized: false,
             },
-          }),
-        },
-      }),
+          },
+        };
+      },
     }),
     UsersModule,
     AuthModule,
