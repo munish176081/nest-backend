@@ -4,6 +4,7 @@ export const createUserTokenData = (user: User) => {
   return {
     id: user.id,
     email: user.email,
+    name: user.name || user.username || 'User',
     username: user.username,
     status: user.status,
     imageUrl: user.imageUrl,

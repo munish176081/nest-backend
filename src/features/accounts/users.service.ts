@@ -72,9 +72,12 @@ export class UsersService {
       return userExist;
     }
 
+    // Create name from firstName and lastName
+    const name = `${firstName || ''} ${lastName || ''}`.trim() || 'User';
     const username = await this.generateUsername(firstName, lastName);
 
     const user = this.userRepo.create({
+      name,
       username,
       ip,
       email,
@@ -106,6 +109,28 @@ export class UsersService {
     return username;
   }
 
+  async generateUsernameFromName(
+    name: string,
+    randomNumber: string = '',
+  ) {
+    // Convert name to lowercase and remove special characters
+    const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const username = `${cleanName}${randomNumber ? `_${randomNumber}` : ''}`;
+    
+    const isUsernameExists = await this.userRepo.findOneBy({
+      username: ILike(username),
+    });
+
+    if (isUsernameExists) {
+      return this.generateUsernameFromName(
+        name,
+        `${randomNumber}${Math.trunc(Math.random() * 100)}`,
+      );
+    }
+
+    return username;
+  }
+
   async getBy({ email }: { email: string }) {
     return this.userRepo.findOneBy({ email });
   }
@@ -120,8 +145,8 @@ export class UsersService {
     const user = await this.userRepo.findOne({
       where: [
         // Check if a user exists with the given username (case-insensitive).
-        { username: ILike(username) },
-        { email },
+        ...(username ? [{ username: ILike(username) }] : []),
+        ...(email ? [{ email }] : []),
       ],
       relations: { externalAccounts: true },
     });
@@ -135,9 +160,14 @@ export class UsersService {
     hashedPassword: string;
     ip?: string;
   }) {
+    // Store the frontend's username as name, and generate a unique username
+    const name = createUser.username;
+    const generatedUsername = await this.generateUsernameFromName(name);
+
     const user = this.userRepo.create({
       email: createUser.email,
-      username: createUser.username,
+      name,
+      username: generatedUsername,
       hashedPassword: createUser.hashedPassword,
       ip: createUser.ip,
       status: 'not_verified',
@@ -231,5 +261,34 @@ export class UsersService {
     } catch (error) {
       console.error('Error updating session after user verification:', error);
     }
+  }
+
+  async migrateExistingUsers() {
+    console.log('Starting migration of existing users...');
+    
+    // Get all users with null name
+    const usersWithNullName = await this.userRepo.find({
+      where: { name: null },
+    });
+
+    console.log(`Found ${usersWithNullName.length} users with null name`);
+
+    for (const user of usersWithNullName) {
+      try {
+        // Set name to username if name is null
+        user.name = user.username || 'User';
+        
+        // Generate a new unique username based on the name
+        const newUsername = await this.generateUsernameFromName(user.name);
+        user.username = newUsername;
+        
+        await this.userRepo.save(user);
+        console.log(`Migrated user: ${user.email} -> name: ${user.name}, username: ${user.username}`);
+      } catch (error) {
+        console.error(`Failed to migrate user ${user.email}:`, error);
+      }
+    }
+
+    console.log('Migration completed');
   }
 }

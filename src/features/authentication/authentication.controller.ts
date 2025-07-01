@@ -39,9 +39,44 @@ export class AuthController {
     private readonly authService: AuthService,
   ) { }
 
+  @Get('google/config')
+  handleGoogleConfig() {
+    return {
+      clientId: this.configService.get('google.clientId') ? 'configured' : 'not configured',
+      clientSecret: this.configService.get('google.clientSecret') ? 'configured' : 'not configured',
+      callbackURL: `${this.configService.get('apiUrl')}/api/v1/auth/google/callback`,
+      apiUrl: this.configService.get('apiUrl'),
+    };
+  }
+
+  @Get('facebook/config')
+  handleFacebookConfig() {
+    return {
+      clientId: this.configService.get('facebook.clientId') ? 'configured' : 'not configured',
+      clientSecret: this.configService.get('facebook.clientSecret') ? 'configured' : 'not configured',
+      callbackURL: `${this.configService.get('apiUrl')}/api/v1/auth/facebook/callback`,
+      apiUrl: this.configService.get('apiUrl'),
+      oauthTimeout: this.configService.get('oauthTimeout'),
+    };
+  }
+
   @UseGuards(GoogleOAuthGuard)
   @Get('google')
   handleGoogleLogin() { }
+
+  @Get('error')
+  handleAuthError(@Req() req: Request, @Res() res: Response) {
+    const messages = req.session?.messages || [];
+    const errorMessage = messages.length > 0 ? messages[messages.length - 1] : 'Authentication failed';
+    
+    // Clear session messages
+    if (req.session?.messages) {
+      req.session.messages = [];
+    }
+    
+    const siteUrl = this.configService.get('siteUrl');
+    res.redirect(`${siteUrl}/auth/sign-in-error?error=${encodeURIComponent(errorMessage)}`);
+  }
 
   @UseGuards(GoogleOAuthGuard)
   @Get('google/callback')

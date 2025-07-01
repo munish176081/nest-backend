@@ -1,9 +1,10 @@
-import { User } from "src/features/accounts/entities/account.entity";;
+import { User } from "src/features/accounts/entities/account.entity";
 import {
   Column,
   CreateDateColumn,
   Entity,
   ManyToOne,
+  JoinColumn,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -25,10 +26,8 @@ export class ExternalAuthAccount {
   @Column({ type: 'jsonb' })
   raw: Record<string, unknown>;
 
-  @Column('uuid', { nullable: true })
-  userId?: string;
-
-  @ManyToOne('User', (user: User) => user.externalAccounts)
+  @ManyToOne(() => User, (user: User) => user.externalAccounts)
+  @JoinColumn({ name: 'userId' })
   user?: User;
 
   @CreateDateColumn({ type: 'timestamptz' })

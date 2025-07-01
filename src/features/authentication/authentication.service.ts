@@ -84,14 +84,34 @@ export class AuthService {
       },
       relations: { user: true },
     });
-    console.log(account.user, account, "ACCOUNT")
+    console.log('Account found:', account ? 'yes' : 'no');
+    console.log('Account user:', account?.user);
+    console.log('Account details:', account);
 
     if (!account) {
+      // First check if a user already exists with this email
+      const existingUser = await this.usersService.getExistByUsernameOrEmail({ email });
+      
+      let user = existingUser;
+      
+      // If no user exists, create one
+      if (!existingUser) {
+        user = await this.usersService.createByAccount({
+          email,
+          imageUrl,
+          ip,
+          firstName,
+          lastName,
+        });
+      }
+
+      // Create the external account and link it to the user
       account = this.externalAuthAccountRepo.create({
         email,
         externalId,
         provider,
         raw,
+        user: user,
       });
 
       await this.externalAuthAccountRepo.save(account);
@@ -101,17 +121,15 @@ export class AuthService {
       throw new UnauthorizedException('User is suspended');
     }
 
+    // Ensure the user is loaded
     if (!account.user) {
-      const newUser = await this.usersService.createByAccount({
-        email,
-        imageUrl,
-        ip,
-        firstName,
-        lastName,
-      });
-
-      account.user = newUser;
-      await this.externalAuthAccountRepo.save(account);
+      const user = await this.usersService.getExistByUsernameOrEmail({ email });
+      if (user) {
+        account.user = user;
+        await this.externalAuthAccountRepo.save(account);
+      } else {
+        throw new UnauthorizedException('User not found');
+      }
     }
 
     return account;
@@ -148,13 +166,12 @@ export class AuthService {
     }
 
     const existUser = await this.usersService.getExistByUsernameOrEmail({
-      username: signupBody.username,
       email: signupBody.email,
     });
 
     if (existUser) {
       throw new BadRequestException(
-        `${signupBody.email === existUser.email ? 'Email' : 'Username'} already exists`,
+        `Email already exists`,
       );
     }
 

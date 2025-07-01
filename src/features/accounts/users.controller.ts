@@ -57,4 +57,11 @@ export class UsersController {
     const user = await this.usersService.validateAndGetUser(req.user.email);
     return { message: 'Session refreshed', user: req.user };
   }
+
+  // Migration endpoint - should be removed after migration is complete
+  @Post('/migrate-users')
+  async migrateUsers() {
+    await this.usersService.migrateExistingUsers();
+    return { message: 'User migration completed' };
+  }
 }

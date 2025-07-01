@@ -8,6 +8,9 @@ export class UserDto {
   email: string;
 
   @Expose()
+  name: string;
+
+  @Expose()
   username: string;
 
   @Expose()
@@ -18,4 +21,9 @@ export class UserDto {
 
   @Expose()
   status: string;
+
+  @Expose()
+  get displayName(): string {
+    return this.name || this.username || 'User';
+  }
 }

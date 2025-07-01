@@ -32,6 +32,7 @@ export class LoggedInGuard implements CanActivate {
       req.user = {
         id: freshUser.id,
         email: freshUser.email,
+        name: freshUser.name,
         username: freshUser.username,
         status: freshUser.status,
         imageUrl: freshUser.imageUrl,
