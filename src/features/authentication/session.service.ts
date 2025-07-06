@@ -39,7 +39,6 @@ export class SessionService {
         }
       } while (cursor !== '0');
       
-      console.log(`Session update completed for user ${userId}`);
     } catch (error) {
       console.error('Error updating user session:', error);
     }
