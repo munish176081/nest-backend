@@ -11,7 +11,7 @@ import { UsersModule } from './features/accounts/users.module';
 import { AuthModule } from './features/authentication/authentication.module';
 import { EmailModule } from './features/email/email.module';
 import { UploadModule } from './features/upload/upload.module';
-
+import { ContactModule } from './features/contact/contact.module';
 
 
 @Module({
@@ -46,6 +46,7 @@ import { UploadModule } from './features/upload/upload.module';
     AuthModule,
     EmailModule,
     UploadModule,
+    ContactModule,
   ],
   providers: [],
 })
