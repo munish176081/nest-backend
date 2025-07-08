@@ -36,7 +36,7 @@ export class Upload {
   @Column({ type: 'int', default: 0 })
   uploadedChunks: number;
 
-  @Column({ type: 'varchar', length: 500, nullable: true })
+  @Column({ type: 'varchar', length: 2000, nullable: true })
   finalUrl: string;
 
   @Column({ type: 'jsonb', nullable: true })

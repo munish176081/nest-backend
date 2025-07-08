@@ -93,6 +93,7 @@ export class UploadService {
       fileName: dto.fileName,
       totalSize: dto.totalSize,
       chunkUrls: dto.chunkUrls,
+      fileType: upload.fileType,
       finalUrl: dto.finalUrl,
       metadata: dto.metadata ? JSON.parse(dto.metadata) : undefined,
     });

@@ -31,11 +31,20 @@ export class R2Service implements IR2Service {
 
   async generateSignedUrl(request: IUploadRequest): Promise<ISignedUrlResponse> {
     const uploadId = request.uploadId || uuidv4();
-    const chunkKey = this.generateChunkKey(request.fileName, uploadId, request.chunkIndex);
+    
+    // Generate structured file path: uploads/{type}/{year}/{month}/{filename}
+    const date = new Date();
+    const year = date.getFullYear().toString();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const sanitizedFileName = request.fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    
+    // Map file type to folder
+    const fileTypeFolder = this.getFileTypeFolder(request.fileType);
+    const fileKey = `uploads/${fileTypeFolder}/${year}/${month}/${sanitizedFileName}`;
     
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
-      Key: chunkKey,
+      Key: fileKey,
       ContentType: request.mimeType,
       Metadata: {
         'upload-id': uploadId,
@@ -52,22 +61,29 @@ export class R2Service implements IR2Service {
     return {
       uploadUrl,
       uploadId,
-      chunkKey,
+      chunkKey: fileKey, // Use the structured path as chunkKey
       expiresAt: new Date(Date.now() + 3600 * 1000),
     };
   }
 
   async completeUpload(request: ICompleteUploadRequest): Promise<string> {
-    // For now, we'll return the first chunk URL as the final URL
-    // In a more advanced implementation, you might want to assemble chunks
-    // or use R2's multipart upload features
-    const finalKey = this.generateFinalKey(request.fileName, request.uploadId);
+    // Use the same structured path that was used during upload
+    const date = new Date();
+    const year = date.getFullYear().toString();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const sanitizedFileName = request.fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
     
-    // You could implement chunk assembly here if needed
-    // For now, we'll assume the frontend handles chunk assembly
-    // and provides the final URL
+    // Map file type to folder
+    const fileTypeFolder = this.getFileTypeFolder(request.fileType || 'image');
+    const fileKey = `uploads/${fileTypeFolder}/${year}/${month}/${sanitizedFileName}`;
     
-    return request.finalUrl || request.chunkUrls[0];
+    // Generate a public URL using the custom CDN domain
+    const publicCdn = this.configService.get<string>('R2_PUBLIC_CDN', 'https://cdn.pups4sale.com.au');
+    const publicUrl = `${publicCdn}/${fileKey}`;
+    
+    this.logger.log(`Generated public URL: ${publicUrl}`);
+    
+    return publicUrl;
   }
 
   async deleteFile(fileUrl: string): Promise<void> {
@@ -105,6 +121,19 @@ export class R2Service implements IR2Service {
     const timestamp = Date.now();
     const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
     return `uploads/${uploadId}/final/${timestamp}_${sanitizedFileName}`;
+  }
+
+  private getFileTypeFolder(fileType: string): string {
+    switch (fileType.toLowerCase()) {
+      case 'image':
+        return 'images';
+      case 'video':
+        return 'videos';
+      case 'document':
+        return 'documents';
+      default:
+        return 'images';
+    }
   }
 
   private extractKeyFromUrl(fileUrl: string): string {

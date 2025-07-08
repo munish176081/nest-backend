@@ -21,6 +21,7 @@ export interface ICompleteUploadRequest {
   fileName: string;
   totalSize: number;
   chunkUrls: string[];
+  fileType?: string;
   finalUrl?: string;
   metadata?: Record<string, any>;
 }
