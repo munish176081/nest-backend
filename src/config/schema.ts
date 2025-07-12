@@ -129,6 +129,9 @@ export const configConfiguration = () => {
         db: 1,
       },
     },
+    contact: {
+      supportEmail: process.env.CONTACT_SUPPORT_EMAIL,
+    },
     stripeSecretKey: process.env.STRIPE_SECRET_KEY,
     stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
     cloudProvider: process.env.CLOUD_PROVIDER,
