@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 
 export type UserStatusEnum = 'not_verified' | 'suspended' | 'active';
+export type UserRoleEnum = 'user' | 'admin' | 'super_admin';
 
 @Entity({ name: 'users' })
 export class User {
@@ -36,6 +37,16 @@ export class User {
 
   @Column({ type: 'varchar', length: 256, nullable: true })
   hashedPassword?: string;
+
+  // New role-related fields (non-breaking additions)
+  @Column({ type: 'enum', enum: ['user', 'admin', 'super_admin'], default: 'user' })
+  role: UserRoleEnum;
+
+  @Column({ type: 'boolean', default: false })
+  isSuperAdmin: boolean;
+
+  @Column({ type: 'jsonb', nullable: true })
+  permissions: Record<string, any>;
 
   @OneToMany(
     () => ExternalAuthAccount,

@@ -22,6 +22,16 @@ export class UserDto {
   @Expose()
   status: string;
 
+  // Role-related fields
+  @Expose()
+  role: string;
+
+  @Expose()
+  isSuperAdmin: boolean;
+
+  @Expose()
+  permissions: Record<string, any>;
+
   @Expose()
   get displayName(): string {
     return this.name || this.username || 'User';
