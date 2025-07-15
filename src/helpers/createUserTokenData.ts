@@ -9,6 +9,10 @@ export const createUserTokenData = (user: User) => {
     status: user.status,
     imageUrl: user.imageUrl,
     createdAt: user.createdAt,
+    // New role fields (with defaults for backward compatibility)
+    role: user.role || 'user',
+    isSuperAdmin: user.isSuperAdmin || false,
+    permissions: user.permissions || null,
   };
 };
 

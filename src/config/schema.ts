@@ -76,6 +76,10 @@ export const configValidationSchema = Joi.object({
 
   // Cloud Provider
   CLOUD_PROVIDER: Joi.string().optional(),
+
+  // Super Admin Configuration
+  SUPER_ADMIN_EMAILS: Joi.string().optional(),
+  SUPER_ADMIN_DEFAULT_PASSWORD: Joi.string().default('Admin@123'),
 });
 
 export const configConfiguration = () => {
@@ -135,5 +139,7 @@ export const configConfiguration = () => {
     stripeSecretKey: process.env.STRIPE_SECRET_KEY,
     stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
     cloudProvider: process.env.CLOUD_PROVIDER,
+    superAdminEmails: process.env.SUPER_ADMIN_EMAILS,
+    superAdminDefaultPassword: process.env.SUPER_ADMIN_DEFAULT_PASSWORD || 'Admin@123',
   };
 };

@@ -6,12 +6,14 @@ import { configOptions } from './config/options';
 import { ExternalAuthAccount } from './features/authentication/entities/external-auth-accounts.entity';
 import { User } from './features/accounts/entities/account.entity';
 import { Upload } from './features/upload/entities/upload.entity';
+import { ActivityLog } from './features/admin/entities/activity-log.entity';
 import { SnakeCaseNamingStrategy } from './helpers/typeOrmSnakeCaseNamingStrategy';
 import { UsersModule } from './features/accounts/users.module';
 import { AuthModule } from './features/authentication/authentication.module';
 import { EmailModule } from './features/email/email.module';
 import { UploadModule } from './features/upload/upload.module';
 import { ContactModule } from './features/contact/contact.module';
+import { AdminModule } from './features/admin/admin.module';
 
 
 @Module({
@@ -26,7 +28,7 @@ import { ContactModule } from './features/contact/contact.module';
           type: 'postgres',
           url: configService.get('dbUrl'),
           synchronize: true,
-          entities: [ExternalAuthAccount, User, Upload],
+          entities: [ExternalAuthAccount, User, Upload, ActivityLog],
           namingStrategy: new SnakeCaseNamingStrategy(),
           logging: !isProduction,
     
@@ -47,6 +49,7 @@ import { ContactModule } from './features/contact/contact.module';
     EmailModule,
     UploadModule,
     ContactModule,
+    AdminModule,
   ],
   providers: [],
 })
