@@ -31,14 +31,14 @@ import { ContactModule } from './features/contact/contact.module';
           logging: !isProduction,
     
           // ✅ Final working setup: one ssl object only
-          // ssl: {
-          //   rejectUnauthorized: false,
-          // },
-          // extra: {
-          //   ssl: {
-          //     rejectUnauthorized: false,
-          //   },
-          // },
+          ssl: {
+            rejectUnauthorized: false,
+          },
+          extra: {
+            ssl: {
+              rejectUnauthorized: false,
+            },
+          },
         };
       },
     }),
