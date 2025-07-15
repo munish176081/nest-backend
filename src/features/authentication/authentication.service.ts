@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
   forwardRef,
 } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ExternalAuthAccount } from './entities/external-auth-accounts.entity';
 import { Repository } from 'typeorm';
