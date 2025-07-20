@@ -16,17 +16,31 @@ export class R2Service implements IR2Service {
     this.bucketName = this.configService.get<string>('R2_BUCKET_NAME');
     this.region = this.configService.get<string>('R2_REGION', 'auto');
 
-    console.log(this.configService.get<string>('R2_ENDPOINT')); 
+    const endpoint = this.configService.get<string>('R2_ENDPOINT');
+    const accessKeyId = this.configService.get<string>('R2_ACCESS_KEY_ID');
+    const secretAccessKey = this.configService.get<string>('R2_SECRET_ACCESS_KEY');
+
+    this.logger.log('R2 Configuration:', {
+      bucketName: this.bucketName,
+      region: this.region,
+      endpoint: endpoint,
+      hasAccessKey: !!accessKeyId,
+      hasSecretKey: !!secretAccessKey,
+    });
+
+    if (!endpoint || !accessKeyId || !secretAccessKey || !this.bucketName) {
+      this.logger.warn('R2 configuration is incomplete. Upload functionality may not work properly.');
+    }
+
     this.s3Client = new S3Client({
       region: this.region,
-      endpoint: this.configService.get<string>('R2_ENDPOINT'),
+      endpoint: endpoint,
       forcePathStyle: true, 
       credentials: {
-        accessKeyId: this.configService.get<string>('R2_ACCESS_KEY_ID'),
-        secretAccessKey: this.configService.get<string>('R2_SECRET_ACCESS_KEY'),
+        accessKeyId: accessKeyId || '',
+        secretAccessKey: secretAccessKey || '',
       },
     });
-    console.log(this.s3Client);
   }
 
   async generateSignedUrl(request: IUploadRequest): Promise<ISignedUrlResponse> {
@@ -110,6 +124,8 @@ export class R2Service implements IR2Service {
 
     return await getSignedUrl(this.s3Client, command, { expiresIn: 3600 });
   }
+
+
 
   private generateChunkKey(fileName: string, uploadId: string, chunkIndex: number): string {
     const timestamp = Date.now();

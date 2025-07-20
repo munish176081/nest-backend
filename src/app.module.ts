@@ -6,12 +6,17 @@ import { configOptions } from './config/options';
 import { ExternalAuthAccount } from './features/authentication/entities/external-auth-accounts.entity';
 import { User } from './features/accounts/entities/account.entity';
 import { Upload } from './features/upload/entities/upload.entity';
+import { Listing } from './features/listings/entities/listing.entity';
+// Temporarily commented out to avoid schema conflicts
+// import { ListingType } from './features/listings/entities/listing-type.entity';
+// import { ListingFile } from './features/listings/entities/listing-file.entity';
 import { SnakeCaseNamingStrategy } from './helpers/typeOrmSnakeCaseNamingStrategy';
 import { UsersModule } from './features/accounts/users.module';
 import { AuthModule } from './features/authentication/authentication.module';
 import { EmailModule } from './features/email/email.module';
 import { UploadModule } from './features/upload/upload.module';
 import { ContactModule } from './features/contact/contact.module';
+import { ListingsModule } from './features/listings/listings.module';
 
 
 @Module({
@@ -25,20 +30,20 @@ import { ContactModule } from './features/contact/contact.module';
         return {
           type: 'postgres',
           url: configService.get('dbUrl'),
-          synchronize: true,
-          entities: [ExternalAuthAccount, User, Upload],
+          synchronize: false, // Disable after adding availability column
+          entities: [ExternalAuthAccount, User, Upload, Listing],
           namingStrategy: new SnakeCaseNamingStrategy(),
           logging: !isProduction,
     
           // ✅ Final working setup: one ssl object only
-          ssl: {
-            rejectUnauthorized: false,
-          },
-          extra: {
-            ssl: {
-              rejectUnauthorized: false,
-            },
-          },
+          // ssl: {
+          //   rejectUnauthorized: false,
+          // },
+          // extra: {
+          //   ssl: {
+          //     rejectUnauthorized: false,
+          //   },
+          // },
         };
       },
     }),
@@ -47,6 +52,7 @@ import { ContactModule } from './features/contact/contact.module';
     EmailModule,
     UploadModule,
     ContactModule,
+    ListingsModule,
   ],
   providers: [],
 })
