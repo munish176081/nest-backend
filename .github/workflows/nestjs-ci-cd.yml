@@ -73,11 +73,23 @@ jobs:
             git remote add origin https://github.com/munish176081/nest-backend.git
           fi
 
+          # Backup .env file if it exists
+          if [ -f .env ]; then
+            echo "Backing up .env file..."
+            cp .env .env.backup
+          fi
+
           # Ensure clean state
           git fetch origin build
           git clean -fd
           git checkout -B build origin/build
           git reset --hard origin/build
+
+          # Restore .env file if it was backed up
+          if [ -f .env.backup ]; then
+            echo "Restoring .env file..."
+            mv .env.backup .env
+          fi
 
           # Install production deps
           pnpm install --prod
