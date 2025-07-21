@@ -21,6 +21,9 @@ export class UploadService {
     chunkKey: string;
     expiresAt: Date;
   }> {
+    this.logger.log(`Requesting upload URL for: ${dto.fileName}`);
+    this.logger.log(`User ID: ${userId}`);
+    
     // Validate file type and size
     this.validateFileType(dto.mimeType, dto.fileType);
     this.validateFileSize(dto.fileSize, dto.fileType);
@@ -48,6 +51,7 @@ export class UploadService {
 
     // Create or update upload record
     if (!upload) {
+      this.logger.log(`Creating new upload record with user ID: ${userId}`);
       upload = await this.uploadRepository.create({
         fileName: dto.fileName,
         mimeType: dto.mimeType,
@@ -60,7 +64,9 @@ export class UploadService {
         userId,
         metadata: dto.metadata ? JSON.parse(dto.metadata) : undefined,
       });
+      this.logger.log(`Created upload record: ${upload.id}`);
     } else {
+      this.logger.log(`Updating existing upload record: ${upload.id}`);
       await this.uploadRepository.updateByUploadId(dto.uploadId, {
         status: 'uploading',
       });
@@ -76,11 +82,16 @@ export class UploadService {
     finalUrl: string;
     status: string;
   }> {
+    this.logger.log(`Completing upload: ${dto.uploadId}`);
+    this.logger.log(`User ID: ${userId}`);
+    
     // Find the upload record
     const upload = await this.uploadRepository.findByUploadId(dto.uploadId);
     if (!upload) {
       throw new NotFoundException('Upload session not found');
     }
+
+    this.logger.log(`Found upload record: ${upload.id}, Current user: ${upload.userId}`);
 
     // Validate that the user owns this upload (if userId is provided)
     if (userId && upload.userId !== userId) {
@@ -98,6 +109,8 @@ export class UploadService {
       metadata: dto.metadata ? JSON.parse(dto.metadata) : undefined,
     });
 
+    this.logger.log(`Generated final URL: ${finalUrl}`);
+
     // Update the upload record
     await this.uploadRepository.updateByUploadId(dto.uploadId, {
       status: 'completed',
@@ -106,7 +119,7 @@ export class UploadService {
       uploadedChunks: dto.chunkUrls.length,
     });
 
-    this.logger.log(`Completed upload: ${dto.fileName}`);
+    this.logger.log(`Updated upload record with final URL: ${finalUrl}`);
 
     return {
       uploadId: dto.uploadId,
@@ -117,6 +130,10 @@ export class UploadService {
 
   async getUserUploads(userId: string): Promise<Upload[]> {
     return await this.uploadRepository.findByUserId(userId);
+  }
+
+  async getAllUploads(): Promise<Upload[]> {
+    return await this.uploadRepository.findAll();
   }
 
   async deleteUpload(uploadId: string, userId?: string): Promise<void> {
@@ -139,6 +156,103 @@ export class UploadService {
 
     this.logger.log(`Deleted upload: ${upload.fileName}`);
   }
+
+  async deleteUploadByUrl(fileUrl: string, userId?: string): Promise<void> {
+    this.logger.log(`Attempting to delete upload by URL: ${fileUrl}`);
+    this.logger.log(`User ID: ${userId}`);
+    
+    // First, let's see all uploads for debugging
+    const allUploads = await this.uploadRepository.findAll();
+    this.logger.log(`Total uploads in database: ${allUploads.length}`);
+    allUploads.forEach(upload => {
+      this.logger.log(`Upload: ${upload.id} | URL: ${upload.finalUrl} | User: ${upload.userId || 'Anonymous'}`);
+    });
+    
+    // Find upload by final URL
+    let upload = await this.uploadRepository.findByFinalUrl(fileUrl);
+    this.logger.log(`Exact URL match result: ${upload ? 'Found' : 'Not found'}`);
+    
+    // If exact match fails, try pattern matching
+    if (!upload) {
+      this.logger.log(`Exact URL match failed, trying pattern matching...`);
+      const uploads = await this.uploadRepository.findByUrlPattern(fileUrl);
+      this.logger.log(`Pattern matching found ${uploads.length} matches`);
+      if (uploads.length > 0) {
+        upload = uploads[0]; // Use the first match
+        this.logger.log(`Found upload via pattern matching: ${upload.id}`);
+      }
+    }
+    
+    if (!upload) {
+      this.logger.warn(`No upload record found for URL: ${fileUrl}`);
+      this.logger.warn(`Available URLs in database:`);
+      allUploads.forEach(u => {
+        this.logger.warn(`  - ${u.finalUrl}`);
+      });
+      
+      // Try to delete from R2 anyway, even if no database record exists
+      try {
+        await this.r2Service.deleteFile(fileUrl);
+        this.logger.log(`Deleted file from R2 without database record: ${fileUrl}`);
+        return;
+      } catch (error) {
+        this.logger.error(`Failed to delete file from R2: ${fileUrl}`, error);
+        throw new NotFoundException('Upload not found for this URL');
+      }
+    }
+
+    this.logger.log(`Found upload record: ${upload.id}, User ID: ${upload.userId}`);
+
+    // Only check user ownership if both userId and upload.userId exist
+    if (userId && upload.userId && upload.userId !== userId) {
+      this.logger.warn(`User ${userId} attempted to delete upload ${upload.id} owned by ${upload.userId}`);
+      throw new BadRequestException('You can only delete your own uploads');
+    }
+
+    // Delete from R2
+    try {
+      await this.r2Service.deleteFile(fileUrl);
+      this.logger.log(`Deleted file from R2: ${fileUrl}`);
+    } catch (error) {
+      this.logger.error(`Failed to delete file from R2: ${fileUrl}`, error);
+      // Continue with database deletion even if R2 deletion fails
+    }
+
+    // Delete from database
+    await this.uploadRepository.delete(upload.id);
+    this.logger.log(`Deleted upload record: ${upload.id}`);
+
+    this.logger.log(`Successfully deleted upload by URL: ${upload.fileName}`);
+  }
+
+  async deleteMultipleUploadsByUrls(fileUrls: string[], userId?: string): Promise<{
+    success: string[];
+    failed: { url: string; error: string }[];
+  }> {
+    this.logger.log(`Attempting to delete ${fileUrls.length} uploads`);
+    this.logger.log(`User ID: ${userId}`);
+    
+    const results = {
+      success: [] as string[],
+      failed: [] as { url: string; error: string }[]
+    };
+
+    // Process each URL
+    for (const fileUrl of fileUrls) {
+      try {
+        await this.deleteUploadByUrl(fileUrl, userId);
+        results.success.push(fileUrl);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.failed.push({ url: fileUrl, error: errorMessage });
+        this.logger.error(`Failed to delete ${fileUrl}: ${errorMessage}`);
+      }
+    }
+
+    this.logger.log(`Bulk delete completed: ${results.success.length} successful, ${results.failed.length} failed`);
+    return results;
+  }
+
 
   private validateFileType(mimeType: string, fileType: FileType): void {
     const allowedMimeTypes = {

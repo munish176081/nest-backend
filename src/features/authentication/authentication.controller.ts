@@ -221,7 +221,7 @@ export class AuthController {
     }
   }
 
-  @Patch('reset-password')
+  @Post('reset-password')
   async resetPassword(
     @Body() resetPasswordBody: ResetPasswordDto,
     @Req() req: Request,

@@ -23,6 +23,17 @@ export class UploadRepository {
     return await this.uploadRepository.findOne({ where: { uploadId } });
   }
 
+  async findByFinalUrl(finalUrl: string): Promise<Upload | null> {
+    return await this.uploadRepository.findOne({ where: { finalUrl } });
+  }
+
+  async findByUrlPattern(urlPattern: string): Promise<Upload[]> {
+    return await this.uploadRepository
+      .createQueryBuilder('upload')
+      .where('upload.finalUrl LIKE :urlPattern', { urlPattern: `%${urlPattern}%` })
+      .getMany();
+  }
+
   async findByUserId(userId: string): Promise<Upload[]> {
     return await this.uploadRepository.find({ 
       where: { userId },
@@ -54,6 +65,12 @@ export class UploadRepository {
   async findCompletedUploads(): Promise<Upload[]> {
     return await this.uploadRepository.find({ 
       where: { status: 'completed' },
+      order: { createdAt: 'DESC' }
+    });
+  }
+
+  async findAll(): Promise<Upload[]> {
+    return await this.uploadRepository.find({
       order: { createdAt: 'DESC' }
     });
   }

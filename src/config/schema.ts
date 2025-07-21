@@ -76,6 +76,14 @@ export const configValidationSchema = Joi.object({
 
   // Cloud Provider
   CLOUD_PROVIDER: Joi.string().optional(),
+
+  // R2 Configuration
+  R2_ACCESS_KEY_ID: Joi.string().optional(),
+  R2_SECRET_ACCESS_KEY: Joi.string().optional(),
+  R2_BUCKET_NAME: Joi.string().optional(),
+  R2_ENDPOINT: Joi.string().optional(),
+  R2_REGION: Joi.string().default('auto'),
+  R2_PUBLIC_CDN: Joi.string().optional(),
 });
 
 export const configConfiguration = () => {
@@ -135,5 +143,13 @@ export const configConfiguration = () => {
     stripeSecretKey: process.env.STRIPE_SECRET_KEY,
     stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
     cloudProvider: process.env.CLOUD_PROVIDER,
+    r2: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      bucketName: process.env.R2_BUCKET_NAME,
+      endpoint: process.env.R2_ENDPOINT,
+      region: process.env.R2_REGION || 'auto',
+      publicCdn: process.env.R2_PUBLIC_CDN,
+    },
   };
 };
