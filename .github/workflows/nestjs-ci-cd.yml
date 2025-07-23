@@ -35,7 +35,7 @@ jobs:
         pnpm install
         pnpm build
 
-    - name: Commit & Push production build to `build` branch
+    - name: Commit & Push to `build` branch
       run: |
         git config user.name "GitHub Actions"
         git config user.email "actions@github.com"
@@ -52,11 +52,12 @@ jobs:
         key: ${{ secrets.AWS_SSH_KEY }}
         script: |
           set -e
-          echo "Starting EC2 deployment..."
 
-          # Install Node, pnpm, and pm2 if missing
+          echo "=== Starting EC2 Deployment ==="
+
+          # Install Node.js, pnpm, and pm2 if missing
           if ! command -v node &> /dev/null; then
-            echo "Installing Node.js and pnpm..."
+            echo "Installing Node.js and tools..."
             curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
             export NVM_DIR="$HOME/.nvm"
             source "$NVM_DIR/nvm.sh"
@@ -64,35 +65,45 @@ jobs:
             npm install -g pnpm pm2
           fi
 
-          # Load nvm
           export NVM_DIR="$HOME/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-          # Go to or create the app directory
+          # Go to app directory
           cd ~/pups4sale/nest-backend || mkdir -p ~/pups4sale/nest-backend && cd $_
 
-          # Clone or pull the build branch
+          # Initialize git if missing
           if [ ! -d .git ]; then
+            echo "Setting up git for first time..."
             git init
             git remote add origin https://github.com/munish176081/nest-backend.git
             git fetch origin build
             git checkout -t origin/build
           else
+            echo "Fetching latest build branch..."
             git fetch origin build
-            git checkout build
-            git pull origin build --rebase
+            git checkout build || git checkout -b build origin/build
+
+            echo "Cleaning up previous rebase if exists..."
+            rm -rf .git/rebase-merge || true
+
+            echo "Resetting to latest build branch..."
+            git reset --hard origin/build
           fi
+
+          # Optional: restore .env if needed
+          # [ -f ../env.bak ] && mv ../env.bak .env
 
           echo "Installing production dependencies..."
           pnpm install --prod
 
-          echo "Stopping previous PM2 process..."
+          echo "Stopping any existing PM2 process..."
           pm2 delete backend || true
 
-          echo "Starting application with PM2..."
+          echo "Starting NestJS app with PM2..."
           pm2 start "pnpm start:prod" --name backend || pm2 restart backend --update-env
 
-          echo "Deployment complete. PM2 Status:"
+          echo "=== Deployment Complete ==="
+          echo "PM2 Status:"
           pm2 status
-          echo "PM2 Logs (last 10 lines):"
+          echo "Recent Logs:"
           pm2 logs backend --lines 10
