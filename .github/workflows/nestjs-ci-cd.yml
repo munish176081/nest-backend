@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: deploy-to-ec2
+  cancel-in-progress: true
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -26,34 +30,30 @@ jobs:
       with:
         version: 8
 
-    - name: Install & Build
+    - name: Install dependencies & Build
       run: |
         pnpm install
         pnpm build
 
-    - name: Prepare build branch
+    - name: Commit & Push production build to `build` branch
       run: |
-        mkdir deploy
-        cp -r dist src package.json pnpm-lock.yaml nest-cli.json deploy/
-        cd deploy
-        git init
         git config user.name "GitHub Actions"
         git config user.email "actions@github.com"
-        git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
         git checkout -B build
         git add -f dist src package.json pnpm-lock.yaml nest-cli.json
-        git commit -m "Deploy: production build"
+        git commit -m "Deploy: production build - $(date)" || echo "No changes to commit"
         git push --force origin build
 
-    - name: Deploy to EC2 from build branch
+    - name: Deploy to EC2 via SSH
       uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.AWS_EC2_HOST }}
         username: ec2-user
         key: ${{ secrets.AWS_SSH_KEY }}
         script: |
-          # Improved deployment: Simple git pull instead of destructive reset
-          # This preserves .env files and other local configurations
+          set -e
+          echo "Starting EC2 deployment..."
+
           # Install Node, pnpm, and pm2 if missing
           if ! command -v node &> /dev/null; then
             echo "Installing Node.js and pnpm..."
@@ -66,29 +66,33 @@ jobs:
 
           # Load nvm
           export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-          # Navigate to the project directory
+          # Go to or create the app directory
           cd ~/pups4sale/nest-backend || mkdir -p ~/pups4sale/nest-backend && cd $_
-          
-          # Initialize git if not already done
+
+          # Clone or pull the build branch
           if [ ! -d .git ]; then
             git init
             git remote add origin https://github.com/munish176081/nest-backend.git
             git fetch origin build
-            git checkout build
+            git checkout -t origin/build
           else
-            # Simple pull from build branch (preserves .env and other local files)
             git fetch origin build
             git checkout build
-            git pull origin build
+            git pull origin build --rebase
           fi
 
-          # Install production deps
+          echo "Installing production dependencies..."
           pnpm install --prod
 
-          # Cleanup previous PM2 app (optional safety)
+          echo "Stopping previous PM2 process..."
           pm2 delete backend || true
 
-          # Start or restart the app
+          echo "Starting application with PM2..."
           pm2 start "pnpm start:prod" --name backend || pm2 restart backend --update-env
+
+          echo "Deployment complete. PM2 Status:"
+          pm2 status
+          echo "PM2 Logs (last 10 lines):"
+          pm2 logs backend --lines 10
