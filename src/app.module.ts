@@ -30,7 +30,7 @@ import { ListingsModule } from './features/listings/listings.module';
         return {
           type: 'postgres',
           url: configService.get('dbUrl'),
-          synchronize: true, // Disable after adding availability column
+          synchronize: true, // Enabled
           entities: [ExternalAuthAccount, User, Upload, Listing],
           namingStrategy: new SnakeCaseNamingStrategy(),
           logging: !isProduction,
