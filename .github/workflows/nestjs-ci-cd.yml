@@ -52,6 +52,8 @@ jobs:
         username: ec2-user
         key: ${{ secrets.AWS_SSH_KEY }}
         script: |
+          # Improved deployment: Simple git pull instead of destructive reset
+          # This preserves .env files and other local configurations
           # Install Node, pnpm, and pm2 if missing
           if ! command -v node &> /dev/null; then
             echo "Installing Node.js and pnpm..."
@@ -66,29 +68,20 @@ jobs:
           export NVM_DIR="$HOME/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-          # Clone or update the repo
+          # Navigate to the project directory
           cd ~/pups4sale/nest-backend || mkdir -p ~/pups4sale/nest-backend && cd $_
+          
+          # Initialize git if not already done
           if [ ! -d .git ]; then
             git init
             git remote add origin https://github.com/munish176081/nest-backend.git
-          fi
-
-          # Backup .env file if it exists
-          if [ -f .env ]; then
-            echo "Backing up .env file..."
-            cp .env .env.backup
-          fi
-
-          # Ensure clean state
-          git fetch origin build
-          git clean -fd
-          git checkout -B build origin/build
-          git reset --hard origin/build
-
-          # Restore .env file if it was backed up
-          if [ -f .env.backup ]; then
-            echo "Restoring .env file..."
-            mv .env.backup .env
+            git fetch origin build
+            git checkout build
+          else
+            # Simple pull from build branch (preserves .env and other local files)
+            git fetch origin build
+            git checkout build
+            git pull origin build
           fi
 
           # Install production deps
