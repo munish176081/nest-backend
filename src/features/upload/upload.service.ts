@@ -256,22 +256,55 @@ export class UploadService {
 
   private validateFileType(mimeType: string, fileType: FileType): void {
     const allowedMimeTypes = {
-      [FileType.IMAGE]: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-      [FileType.VIDEO]: ['video/mp4', 'video/avi', 'video/mov', 'video/wmv'],
-      [FileType.DOCUMENT]: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      [FileType.IMAGE]: [
+        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 
+        'image/bmp', 'image/tiff', 'image/svg+xml'
+      ],
+      [FileType.VIDEO]: [
+        'video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/flv',
+        'video/webm', 'video/mkv', 'video/3gp', 'video/ogg', 'video/m4v'
+      ],
+      [FileType.DOCUMENT]: [
+        'application/pdf',
+        'application/msword', // .doc
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+        'application/vnd.ms-excel', // .xls
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+        'application/vnd.ms-powerpoint', // .ppt
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+        'text/plain', // .txt
+        'text/csv', // .csv
+        'application/rtf' // .rtf
+      ],
     };
+
+    // Security: Block dangerous file types
+    const blockedMimeTypes = [
+      'application/x-executable', 'application/x-msdownload', 'application/x-msi',
+      'application/x-shockwave-flash', 'application/x-sh', 'application/x-bat',
+      'application/x-cmd', 'application/x-com', 'application/x-exe',
+      'application/zip', 'application/x-zip-compressed', 'application/x-rar-compressed',
+      'application/x-7z-compressed', 'application/x-tar', 'application/x-gzip',
+      'text/html', 'text/javascript', 'application/javascript', 'application/x-javascript',
+      'application/x-php', 'application/x-python', 'application/x-ruby',
+      'application/x-perl', 'application/x-shellscript'
+    ];
+
+    if (blockedMimeTypes.includes(mimeType)) {
+      throw new BadRequestException(`File type not allowed for security reasons: ${mimeType}`);
+    }
 
     const allowedTypes = allowedMimeTypes[fileType];
     if (!allowedTypes.includes(mimeType)) {
-      throw new BadRequestException(`Invalid file type for ${fileType}: ${mimeType}`);
+      throw new BadRequestException(`Invalid file type for ${fileType}: ${mimeType}. Allowed types: ${allowedTypes.join(', ')}`);
     }
   }
 
   private validateFileSize(fileSize: number, fileType: FileType): void {
     const maxSizes = {
-      [FileType.IMAGE]: 10 * 1024 * 1024, // 10MB
-      [FileType.VIDEO]: 100 * 1024 * 1024, // 100MB
-      [FileType.DOCUMENT]: 50 * 1024 * 1024, // 50MB
+      [FileType.IMAGE]: 15 * 1024 * 1024, // 15MB - for high-res images
+      [FileType.VIDEO]: 500 * 1024 * 1024, // 500MB - for longer videos
+      [FileType.DOCUMENT]: 25 * 1024 * 1024, // 25MB - for large documents
     };
 
     const maxSize = maxSizes[fileType];
