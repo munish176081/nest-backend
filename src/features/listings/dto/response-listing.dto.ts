@@ -72,6 +72,12 @@ export class ListingResponseDto {
   analytics: Record<string, any>;
 
   @Expose()
+  motherInfo: Record<string, any>;
+
+  @Expose()
+  fatherInfo: Record<string, any>;
+
+  @Expose()
   createdAt: Date;
 
   @Expose()

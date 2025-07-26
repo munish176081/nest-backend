@@ -46,15 +46,8 @@ export class R2Service implements IR2Service {
   async generateSignedUrl(request: IUploadRequest): Promise<ISignedUrlResponse> {
     const uploadId = request.uploadId || uuidv4();
     
-    // Generate structured file path: uploads/{type}/{year}/{month}/{filename}
-    const date = new Date();
-    const year = date.getFullYear().toString();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const sanitizedFileName = request.fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    
-    // Map file type to folder
-    const fileTypeFolder = this.getFileTypeFolder(request.fileType);
-    const fileKey = `uploads/${fileTypeFolder}/${year}/${month}/${sanitizedFileName}`;
+    // Generate unique file path
+    const fileKey = this.generateUniqueFileKey(request.fileName, uploadId, request.fileType);
     
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
@@ -81,15 +74,8 @@ export class R2Service implements IR2Service {
   }
 
   async completeUpload(request: ICompleteUploadRequest): Promise<string> {
-    // Use the same structured path that was used during upload
-    const date = new Date();
-    const year = date.getFullYear().toString();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const sanitizedFileName = request.fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    
-    // Map file type to folder
-    const fileTypeFolder = this.getFileTypeFolder(request.fileType || 'image');
-    const fileKey = `uploads/${fileTypeFolder}/${year}/${month}/${sanitizedFileName}`;
+    // Use the same unique file path that was generated during the initial upload
+    const fileKey = this.generateUniqueFileKey(request.fileName, request.uploadId, request.fileType || 'image');
     
     // Generate a public URL using the custom CDN domain
     const publicCdn = this.configService.get<string>('R2_PUBLIC_CDN', 'https://cdn.pups4sale.com.au');
@@ -126,6 +112,22 @@ export class R2Service implements IR2Service {
   }
 
 
+
+  private generateUniqueFileKey(fileName: string, uploadId: string, fileType: string): string {
+    // Generate structured file path: uploads/{type}/{year}/{month}/{filename}
+    const date = new Date();
+    const year = date.getFullYear().toString();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    
+    // Generate unique filename with timestamp and upload ID to prevent conflicts
+    const timestamp = Date.now();
+    const uniqueFileName = `${timestamp}_${uploadId}_${sanitizedFileName}`;
+    
+    // Map file type to folder
+    const fileTypeFolder = this.getFileTypeFolder(fileType);
+    return `uploads/${fileTypeFolder}/${year}/${month}/${uniqueFileName}`;
+  }
 
   private generateChunkKey(fileName: string, uploadId: string, chunkIndex: number): string {
     const timestamp = Date.now();

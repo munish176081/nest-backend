@@ -104,12 +104,38 @@ export class Listing {
     images?: string[];
     videos?: string[];
     documents?: string[];
+    motherImages?: string[];
+    fatherImages?: string[];
+    motherVideos?: string[];
+    fatherVideos?: string[];
     tags?: string[];
     featured?: boolean;
     premium?: boolean;
     views?: number;
     favorites?: number;
     [key: string]: any;
+  };
+
+  @Column({ type: 'jsonb', nullable: true })
+  @Index('idx_listings_mother_info', { synchronize: false })
+  motherInfo: {
+    name?: string;
+    breed?: string;
+    color?: string;
+    weight?: string;
+    temperament?: string;
+    healthInfo?: string;
+  };
+
+  @Column({ type: 'jsonb', nullable: true })
+  @Index('idx_listings_father_info', { synchronize: false })
+  fatherInfo: {
+    name?: string;
+    breed?: string;
+    color?: string;
+    weight?: string;
+    temperament?: string;
+    healthInfo?: string;
   };
 
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })

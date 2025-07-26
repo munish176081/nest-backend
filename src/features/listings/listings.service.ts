@@ -9,7 +9,7 @@ import { ListingResponseDto, ListingSummaryDto, PaginatedListingsResponseDto } f
 export class ListingsService {
   constructor(
     private readonly listingsRepository: ListingsRepository,
-  ) {}
+  ) { }
 
   async createListing(userId: string, createListingDto: CreateListingDto): Promise<ListingResponseDto> {
     // Validate listing type and category
@@ -18,7 +18,7 @@ export class ListingsService {
     // Process and validate dynamic fields based on listing type
     const processedFields = createListingDto.fields ? await this.processListingFields(createListingDto.type, createListingDto.fields) : {};
 
-    // Build metadata object
+    // Build metadata object - preserve all metadata from DTO and merge with backend fields
     const metadata: Record<string, any> = {
       contactInfo: createListingDto.contactInfo,
       images: createListingDto.images || [],
@@ -27,7 +27,16 @@ export class ListingsService {
       tags: createListingDto.tags || [],
       featured: createListingDto.isFeatured || false,
       premium: createListingDto.isPremium || false,
+      ...createListingDto.metadata, // Preserve all frontend metadata (including parent images/videos) - spread last to avoid overwrites
     };
+
+    // Debug: Log the metadata to see what's being saved
+    console.log('🔍 CreateListing Metadata Debug:', {
+      originalMetadata: createListingDto.metadata,
+      finalMetadata: metadata,
+      motherImages: metadata.motherImages,
+      fatherImages: metadata.fatherImages
+    });
 
     // Calculate expiration date based on listing type
     const expiresAt = this.calculateExpirationDate(createListingDto.type, createListingDto.expiresAt);
@@ -48,6 +57,8 @@ export class ListingsService {
       status: ListingStatusEnum.ACTIVE,
       isActive: true,
       seoData: createListingDto.seoData,
+      motherInfo: createListingDto.motherInfo,
+      fatherInfo: createListingDto.fatherInfo,
     };
 
     const listing = await this.listingsRepository.create(listingData);
@@ -56,7 +67,7 @@ export class ListingsService {
 
   async updateListing(userId: string, listingId: string, updateListingDto: UpdateListingDto): Promise<ListingResponseDto> {
     const listing = await this.listingsRepository.findById(listingId);
-    
+
     if (!listing) {
       throw new NotFoundException('Listing not found');
     }
@@ -71,15 +82,25 @@ export class ListingsService {
       processedFields = await this.processListingFields(listing.type, updateListingDto.fields);
     }
 
-    // Handle metadata updates
-    let metadata = listing.metadata || {};
-    
-    // Update contact info
+    // Handle metadata updates - preserve all metadata from DTO and merge with existing metadata
+    let metadata = {
+      ...listing.metadata, // Preserve existing metadata
+      ...updateListingDto.metadata, // Preserve all frontend metadata (including parent images/videos) - spread last to avoid overwrites
+    };
+
+    // Debug: Log the metadata to see what's being saved
+    console.log('🔍 UpdateListing Metadata Debug:', {
+      existingMetadata: listing.metadata,
+      newMetadata: updateListingDto.metadata,
+      finalMetadata: metadata,
+      motherImages: metadata.motherImages,
+      fatherImages: metadata.fatherImages
+    });
+
+    // Update specific fields if provided
     if (updateListingDto.contactInfo) {
       metadata.contactInfo = updateListingDto.contactInfo;
     }
-    
-    // Update media files
     if (updateListingDto.images) {
       metadata.images = updateListingDto.images;
     }
@@ -89,8 +110,6 @@ export class ListingsService {
     if (updateListingDto.documents) {
       metadata.documents = updateListingDto.documents;
     }
-    
-    // Update tags
     if (updateListingDto.tags) {
       metadata.tags = updateListingDto.tags;
     }
@@ -105,6 +124,8 @@ export class ListingsService {
       metadata,
       expiresAt: updateListingDto.expiresAt ? new Date(updateListingDto.expiresAt) : undefined,
       seoData: updateListingDto.seoData,
+      motherInfo: updateListingDto.motherInfo,
+      fatherInfo: updateListingDto.fatherInfo,
     };
 
     const updatedListing = await this.listingsRepository.update(listingId, updateData);
@@ -113,7 +134,7 @@ export class ListingsService {
 
   async updateAvailability(userId: string, listingId: string, availability: ListingAvailabilityEnum): Promise<ListingResponseDto> {
     const listing = await this.listingsRepository.findById(listingId);
-    
+
     if (!listing) {
       throw new NotFoundException('Listing not found');
     }
@@ -132,7 +153,7 @@ export class ListingsService {
 
   async publishListing(userId: string, listingId: string): Promise<ListingResponseDto> {
     const listing = await this.listingsRepository.findById(listingId);
-    
+
     if (!listing) {
       throw new NotFoundException('Listing not found');
     }
@@ -159,7 +180,7 @@ export class ListingsService {
 
   async deleteListing(userId: string, listingId: string): Promise<void> {
     const listing = await this.listingsRepository.findById(listingId);
-    
+
     if (!listing) {
       throw new NotFoundException('Listing not found');
     }
@@ -173,7 +194,7 @@ export class ListingsService {
 
   async getListingById(listingId: string, incrementView = false, userId?: string): Promise<ListingResponseDto> {
     const listing = await this.listingsRepository.findById(listingId, true);
-    
+
     if (!listing) {
       throw new NotFoundException('Listing not found');
     }
@@ -201,7 +222,7 @@ export class ListingsService {
 
   async searchListings(searchDto: SearchListingDto): Promise<PaginatedListingsResponseDto> {
     const result = await this.listingsRepository.searchListings(searchDto);
-    
+
     return {
       data: result.listings.map(listing => this.transformToListingSummary(listing)),
       total: result.total,
@@ -215,7 +236,7 @@ export class ListingsService {
 
   async getListings(queryDto: QueryListingDto): Promise<PaginatedListingsResponseDto> {
     const result = await this.listingsRepository.findActiveListings(queryDto);
-    
+
     return {
       data: result.listings.map(listing => this.transformToListingSummary(listing)),
       total: result.total,
@@ -357,6 +378,8 @@ export class ListingsService {
       createdAt: listing.createdAt,
       updatedAt: listing.updatedAt,
       availability: listing.availability,
+      motherInfo: listing.motherInfo,
+      fatherInfo: listing.fatherInfo,
       user: listing.user,
     };
   }

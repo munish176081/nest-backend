@@ -39,6 +39,32 @@ export class SeoDataDto {
   keywords?: string[];
 }
 
+export class ParentInfoDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  breed?: string;
+
+  @IsOptional()
+  @IsString()
+  color?: string;
+
+  @IsOptional()
+  @IsString()
+  weight?: string;
+
+  @IsOptional()
+  @IsString()
+  temperament?: string;
+
+  @IsOptional()
+  @IsString()
+  healthInfo?: string;
+}
+
 export class CreateListingDto {
   @IsString()
   title: string;
@@ -114,6 +140,16 @@ export class CreateListingDto {
   @ValidateNested()
   @Type(() => SeoDataDto)
   seoData?: SeoDataDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ParentInfoDto)
+  motherInfo?: ParentInfoDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ParentInfoDto)
+  fatherInfo?: ParentInfoDto;
 
   @IsOptional()
   @IsObject()
