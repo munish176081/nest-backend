@@ -1,0 +1,37 @@
+import { Request } from 'express';
+import { ListingsService } from './listings.service';
+import { CreateListingDto, UpdateListingDto, QueryListingDto, SearchListingDto } from './dto';
+import { ListingResponseDto, ListingSummaryDto, PaginatedListingsResponseDto } from './dto/response-listing.dto';
+export declare class ListingsController {
+    private readonly listingsService;
+    constructor(listingsService: ListingsService);
+    createListing(req: Request, createListingDto: CreateListingDto): Promise<ListingResponseDto>;
+    updateListing(req: Request, id: string, updateListingDto: UpdateListingDto): Promise<ListingResponseDto>;
+    publishListing(req: Request, id: string): Promise<ListingResponseDto>;
+    deleteListing(req: Request, id: string): Promise<void>;
+    getListingById(id: string, incrementView?: string): Promise<ListingResponseDto>;
+    getUserListings(req: Request, status?: string, includeExpired?: string, includeDrafts?: string): Promise<ListingSummaryDto[]>;
+    searchListings(searchDto: SearchListingDto): Promise<PaginatedListingsResponseDto>;
+    getListings(queryDto: QueryListingDto): Promise<PaginatedListingsResponseDto>;
+    getFeaturedListings(limit?: string): Promise<ListingSummaryDto[]>;
+    getPremiumListings(limit?: string): Promise<ListingSummaryDto[]>;
+    incrementFavoriteCount(id: string): Promise<void>;
+    decrementFavoriteCount(id: string): Promise<void>;
+    incrementContactCount(id: string): Promise<void>;
+    getMyListingStats(req: Request): Promise<{
+        total: number;
+        active: number;
+        draft: number;
+        expired: number;
+        featured: number;
+        premium: number;
+    }>;
+    getGlobalListingStats(): Promise<{
+        total: number;
+        active: number;
+        draft: number;
+        expired: number;
+        featured: number;
+        premium: number;
+    }>;
+}
