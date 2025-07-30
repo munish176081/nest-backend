@@ -57,7 +57,7 @@ class BreedSeed {
 // Database configuration
 const dataSource = new DataSource({
   type: 'postgres',
-  url: process.env.dbUrl || 'postgresql://localhost:5432/pups4sale',
+  url: process.env.DATABASE_URL || 'postgresql://localhost:5432/pups4sale',
   entities: [BreedSeed],
   synchronize: false, // Don't auto-sync for seeding
   logging: true,
