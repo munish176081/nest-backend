@@ -23,6 +23,12 @@ export class UserDto {
   status: string;
 
   @Expose()
+  role: string;
+
+  @Expose()
+  isSuperAdmin: boolean;
+
+  @Expose()
   get displayName(): string {
     return this.name || this.username || 'User';
   }

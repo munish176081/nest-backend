@@ -1,4 +1,4 @@
-import { User } from "src/features/accounts/entities/account.entity";
+import { User } from "../../accounts/entities/account.entity";
 import {
   Column,
   CreateDateColumn,

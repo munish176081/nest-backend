@@ -199,6 +199,112 @@ export class UsersService {
     return user;
   }
 
+  // Admin methods
+  async getUsersForAdmin({ page = 1, limit = 20, search, role }: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    role?: 'user' | 'admin' | 'super_admin';
+  }) {
+    const skip = (page - 1) * limit;
+    const whereConditions: any[] = [];
+
+    if (search) {
+      whereConditions.push(
+        { name: ILike(`%${search}%`) },
+        { email: ILike(`%${search}%`) },
+        { username: ILike(`%${search}%`) }
+      );
+    }
+
+    if (role) {
+      whereConditions.push({ role });
+    }
+
+    const [users, total] = await this.userRepo.findAndCount({
+      where: whereConditions.length > 0 ? whereConditions : undefined,
+      skip,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      users,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async searchUsersForAdmin({ page = 1, limit = 20, search }: {
+    page?: number;
+    limit?: number;
+    search: string;
+  }) {
+    return this.getUsersForAdmin({ page, limit, search });
+  }
+
+  async getUsersByRoleForAdmin({ page = 1, limit = 20, role }: {
+    page?: number;
+    limit?: number;
+    role: 'user' | 'admin' | 'super_admin';
+  }) {
+    return this.getUsersForAdmin({ page, limit, role });
+  }
+
+  async getUserById(id: string) {
+    const user = await this.userRepo.findOne({ where: { id } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    return user;
+  }
+
+  async updateUserStatus(id: string, status: 'active' | 'suspended' | 'not_verified') {
+    const user = await this.getUserById(id);
+    user.status = status;
+    return this.userRepo.save(user);
+  }
+
+  async updateUserRole(id: string, roleUpdate: { email: string; role: 'user' | 'admin' | 'super_admin' }) {
+    const user = await this.getUserById(id);
+    user.role = roleUpdate.role;
+    user.isSuperAdmin = roleUpdate.role === 'super_admin';
+    return this.userRepo.save(user);
+  }
+
+  async deleteUser(id: string) {
+    const user = await this.getUserById(id);
+    await this.userRepo.remove(user);
+    return { message: 'User deleted successfully' };
+  }
+
+  async getDashboardStats() {
+    const [totalUsers, activeUsers, suspendedUsers, unverifiedUsers] = await Promise.all([
+      this.userRepo.count(),
+      this.userRepo.count({ where: { status: 'active' } }),
+      this.userRepo.count({ where: { status: 'suspended' } }),
+      this.userRepo.count({ where: { status: 'not_verified' } }),
+    ]);
+
+    const [superAdmins, admins, regularUsers] = await Promise.all([
+      this.userRepo.count({ where: { role: 'super_admin' } }),
+      this.userRepo.count({ where: { role: 'admin' } }),
+      this.userRepo.count({ where: { role: 'user' } }),
+    ]);
+
+    return {
+      totalUsers,
+      activeUsers,
+      suspendedUsers,
+      unverifiedUsers,
+      superAdmins,
+      admins,
+      regularUsers,
+    };
+  }
+
   async verifyUser(userId: string) {
     const { affected } = await this.userRepo.update(
       { id: userId, status: Not('active') },

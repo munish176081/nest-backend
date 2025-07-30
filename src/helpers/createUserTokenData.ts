@@ -9,6 +9,8 @@ export const createUserTokenData = (user: User) => {
     status: user.status,
     imageUrl: user.imageUrl,
     createdAt: user.createdAt,
+    role: user.role,
+    isSuperAdmin: user.isSuperAdmin,
   };
 };
 

@@ -37,6 +37,8 @@ export class LoggedInGuard implements CanActivate {
         status: freshUser.status,
         imageUrl: freshUser.imageUrl,
         createdAt: freshUser.createdAt,
+        role: freshUser.role,
+        isSuperAdmin: freshUser.isSuperAdmin,
       };
     } catch (error) {
       console.error('Error refreshing user session:', error);

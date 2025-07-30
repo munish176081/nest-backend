@@ -7,6 +7,7 @@ import { ExternalAuthAccount } from './features/authentication/entities/external
 import { User } from './features/accounts/entities/account.entity';
 import { Upload } from './features/upload/entities/upload.entity';
 import { Listing } from './features/listings/entities/listing.entity';
+import { Breed } from './features/breeds/entities/breed.entity';
 // Temporarily commented out to avoid schema conflicts
 // import { ListingType } from './features/listings/entities/listing-type.entity';
 // import { ListingFile } from './features/listings/entities/listing-file.entity';
@@ -17,6 +18,7 @@ import { EmailModule } from './features/email/email.module';
 import { UploadModule } from './features/upload/upload.module';
 import { ContactModule } from './features/contact/contact.module';
 import { ListingsModule } from './features/listings/listings.module';
+import { BreedsModule } from './features/breeds/breeds.module';
 
 
 @Module({
@@ -31,7 +33,7 @@ import { ListingsModule } from './features/listings/listings.module';
           type: 'postgres',
           url: configService.get('dbUrl'),
           synchronize: true, // Enabled
-          entities: [ExternalAuthAccount, User, Upload, Listing],
+          entities: [ExternalAuthAccount, User, Upload, Listing, Breed],
           namingStrategy: new SnakeCaseNamingStrategy(),
           logging: !isProduction,
     
@@ -53,6 +55,7 @@ import { ListingsModule } from './features/listings/listings.module';
     UploadModule,
     ContactModule,
     ListingsModule,
+    BreedsModule,
   ],
   providers: [],
 })

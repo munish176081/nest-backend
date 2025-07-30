@@ -247,8 +247,11 @@ export class ListingsRepository {
       .leftJoinAndSelect('listing.user', 'user');
 
     // Base filters
-    if (!queryDto.includeDrafts) {
-      queryBuilder.andWhere('listing.status != :draft', { draft: ListingStatusEnum.DRAFT });
+    if (queryDto.status) {
+      queryBuilder.andWhere('listing.status = :status', { status: queryDto.status });
+    } else {
+      // Default to active listings if no specific status
+      queryBuilder.andWhere('listing.status = :status', { status: ListingStatusEnum.ACTIVE });
     }
 
     if (!queryDto.includeExpired) {

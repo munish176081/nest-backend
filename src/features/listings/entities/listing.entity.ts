@@ -10,6 +10,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { User } from '../../accounts/entities/account.entity';
+import { Breed } from '../../breeds/entities/breed.entity';
 // Temporarily commented out to avoid schema conflicts
 // import { ListingFile } from './listing-file.entity';
 // import { ListingType } from './listing-type.entity';
@@ -143,7 +144,11 @@ export class Listing {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   @Index()
-  breed: string;
+  breed: string; // Keep for backward compatibility
+
+  @Column({ type: 'uuid', nullable: true })
+  @Index()
+  breedId: string; // New foreign key to breeds table
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   @Index()
@@ -208,6 +213,10 @@ export class Listing {
   @ManyToOne(() => User, (user) => user.listings, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user: User;
+
+  @ManyToOne(() => Breed, { nullable: true })
+  @JoinColumn({ name: 'breedId' })
+  breedRelation: Breed;
 
   // Temporarily commented out to avoid schema conflicts
   // @ManyToOne(() => ListingType, (listingType) => listingType.listings, { nullable: true })

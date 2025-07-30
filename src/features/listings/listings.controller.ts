@@ -24,7 +24,7 @@ import { Serialize } from '../../transformers/serialize.interceptor';
 export class ListingsController {
   constructor(private readonly listingsService: ListingsService) {}
 
-  // Create new listing
+  // Create listing
   @UseGuards(LoggedInGuard)
   @Post()
   @Serialize(ListingResponseDto)
@@ -47,7 +47,7 @@ export class ListingsController {
     return await this.listingsService.updateListing(req.user.id, id, updateListingDto);
   }
 
-  // Publish listing (change status from draft to active)
+  // Publish listing
   @UseGuards(LoggedInGuard)
   @Post(':id/publish')
   @Serialize(ListingResponseDto)
@@ -67,16 +67,6 @@ export class ListingsController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<void> {
     await this.listingsService.deleteListing(req.user.id, id);
-  }
-
-  // Get listing by ID (public)
-  @Get(':id')
-  @Serialize(ListingResponseDto)
-  async getListingById(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Query('incrementView') incrementView?: string,
-  ): Promise<ListingResponseDto> {
-    return await this.listingsService.getListingById(id, incrementView === 'true');
   }
 
   // Get user's listings
@@ -124,6 +114,29 @@ export class ListingsController {
     return await this.listingsService.getPremiumListings(parseInt(limit) || 10);
   }
 
+  // Get listing statistics
+  @UseGuards(LoggedInGuard)
+  @Get('stats/my')
+  async getMyListingStats(@Req() req: Request) {
+    return await this.listingsService.getListingStats(req.user.id);
+  }
+
+  // Get global listing statistics (public)
+  @Get('stats/global')
+  async getGlobalListingStats() {
+    return await this.listingsService.getListingStats();
+  }
+
+  // Get listing by ID (public) - This must come after all specific routes
+  @Get(':id')
+  @Serialize(ListingResponseDto)
+  async getListingById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('incrementView') incrementView?: string,
+  ): Promise<ListingResponseDto> {
+    return await this.listingsService.getListingById(id, incrementView === 'true');
+  }
+
   // Increment favorite count
   @Post(':id/favorite')
   @HttpCode(HttpStatus.NO_CONTENT)
@@ -143,18 +156,5 @@ export class ListingsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async incrementContactCount(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.listingsService.incrementContactCount(id);
-  }
-
-  // Get listing statistics
-  @UseGuards(LoggedInGuard)
-  @Get('stats/my')
-  async getMyListingStats(@Req() req: Request) {
-    return await this.listingsService.getListingStats(req.user.id);
-  }
-
-  // Get global listing statistics (admin only)
-  @Get('stats/global')
-  async getGlobalListingStats() {
-    return await this.listingsService.getListingStats();
   }
 } 

@@ -1,5 +1,5 @@
-import { ExternalAuthAccount } from 'src/features/authentication/entities/external-auth-accounts.entity';
-import { Listing } from 'src/features/listings/entities/listing.entity';
+import { ExternalAuthAccount } from '../../authentication/entities/external-auth-accounts.entity';
+import { Listing } from '../../listings/entities/listing.entity';
 import {
   Column,
   CreateDateColumn,
@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 
 export type UserStatusEnum = 'not_verified' | 'suspended' | 'active';
+export type UserRoleEnum = 'user' | 'admin' | 'super_admin';
 
 @Entity({ name: 'users' })
 export class User {
@@ -27,6 +28,12 @@ export class User {
 
   @Column({ type: 'varchar', length: 32, default: 'not_verified' })
   status: UserStatusEnum;
+
+  @Column({ type: 'varchar', length: 32, default: 'user' })
+  role: UserRoleEnum;
+
+  @Column({ type: 'boolean', default: false })
+  isSuperAdmin: boolean;
 
   @Column({ type: 'varchar', length: 512, nullable: true })
   imageUrl?: string;
