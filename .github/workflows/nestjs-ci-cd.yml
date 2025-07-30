@@ -93,8 +93,11 @@ jobs:
           # Optional: restore .env if needed
           # [ -f ../env.bak ] && mv ../env.bak .env
 
-          echo "Installing production dependencies..."
-          pnpm install --prod
+          echo "Installing all dependencies (including dev dependencies for build)..."
+          pnpm install
+
+          echo "Building the application..."
+          pnpm build
 
           echo "Stopping any existing PM2 process..."
           pm2 delete backend || true
