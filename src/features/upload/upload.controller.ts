@@ -12,6 +12,8 @@ import {
   UseInterceptors,
   UploadedFile,
   Logger,
+  Res,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadService } from './upload.service';
@@ -77,24 +79,23 @@ export class UploadController {
     }
   }
 
-  @Post('debug/bulk-delete')
+  @Post('bulk-delete')
   @UseGuards(LoggedInGuard)
-  async bulkDelete(@Body() body: { fileUrls: string[] }, @Request() req: any) {
+  async bulkDeleteUploads(
+    @Body() body: { fileUrls: string[] },
+    @Request() req: any,
+  ) {
     const userId = req.user?.id;
-    try {
-      const results = await this.uploadService.deleteMultipleUploadsByUrls(body.fileUrls, userId);
-      return { 
-        success: true, 
-        message: `Bulk delete completed: ${results.success.length} successful, ${results.failed.length} failed`,
-        results
-      };
-    } catch (error) {
-      return { 
-        success: false, 
-        message: error.message,
-        error: error.response?.data || error
-      };
-    }
+    const results = await this.uploadService.deleteMultipleUploadsByUrls(body.fileUrls, userId);
+    
+    // Return success: false if any files failed to delete
+    const success = results.failed.length === 0;
+    
+    return { 
+      success,
+      message: `Bulk delete completed: ${results.success.length} successful, ${results.failed.length} failed`,
+      results
+    };
   }
 
   @Delete(':uploadId')
@@ -117,6 +118,67 @@ export class UploadController {
   ) {
     const userId = req.user?.id;
     await this.uploadService.deleteUploadByUrl(dto.fileUrl, userId);
+  }
+
+  @Get('proxy/image')
+  async proxyImage(@Query('url') imageUrl: string, @Res() res: any) {
+    this.logger.log(`Proxy image request received for URL: ${imageUrl}`);
+    
+    if (!imageUrl) {
+      this.logger.warn('Proxy image request missing URL parameter');
+      return res.status(400).json({ error: 'Image URL is required' });
+    }
+
+    try {
+      // Validate that the URL is from our CDN
+      if (!imageUrl.includes('cdn.pups4sale.com.au')) {
+        this.logger.warn(`Invalid image URL (not from CDN): ${imageUrl}`);
+        return res.status(403).json({ error: 'Invalid image URL' });
+      }
+
+      this.logger.log(`Fetching image from R2: ${imageUrl}`);
+      
+      // Fetch the image from R2
+      const response = await fetch(imageUrl);
+      
+      this.logger.log(`R2 response status: ${response.status}, content-type: ${response.headers.get('content-type')}`);
+      
+      if (!response.ok) {
+        this.logger.error(`Failed to fetch image from R2: ${response.status} ${response.statusText}`);
+        return res.status(response.status).json({ error: 'Failed to fetch image' });
+      }
+
+      // Get the content type
+      const contentType = response.headers.get('content-type') || 'image/jpeg';
+      
+      this.logger.log(`Serving image with content-type: ${contentType}`);
+      
+      // Set CORS headers
+      res.set({
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
+      });
+
+      // Stream the image data
+      const buffer = await response.arrayBuffer();
+      this.logger.log(`Image buffer size: ${buffer.byteLength} bytes`);
+      
+      res.send(Buffer.from(buffer));
+      this.logger.log('Image served successfully');
+      
+    } catch (error) {
+      this.logger.error('Error proxying image:', error);
+      res.status(500).json({ error: 'Failed to proxy image' });
+    }
+  }
+
+  @Get('proxy/test')
+  async proxyTest(@Res() res: any) {
+    this.logger.log('Proxy test endpoint called');
+    res.json({ message: 'Proxy endpoint is working', timestamp: new Date().toISOString() });
   }
 
   // Public endpoint for requesting upload URL (for anonymous uploads)

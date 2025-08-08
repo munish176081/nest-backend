@@ -13,6 +13,7 @@ export interface IUploadRequest {
   totalChunks: number;
   fileType: string;
   uploadId?: string;
+  fileKey?: string;
   metadata?: Record<string, any>;
 }
 
@@ -23,6 +24,7 @@ export interface ICompleteUploadRequest {
   chunkUrls: string[];
   fileType?: string;
   finalUrl?: string;
+  fileKey?: string;
   metadata?: Record<string, any>;
 }
 

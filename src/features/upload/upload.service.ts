@@ -30,11 +30,14 @@ export class UploadService {
 
     // Check if this is a new upload or resuming
     let upload: Upload | null = null;
+    let fileKey: string | undefined;
+    
     if (dto.uploadId) {
       upload = await this.uploadRepository.findByUploadId(dto.uploadId);
       if (!upload) {
         throw new NotFoundException('Upload session not found');
       }
+      fileKey = upload.fileKey;
     }
 
     // Generate signed URL
@@ -46,6 +49,7 @@ export class UploadService {
       totalChunks: dto.totalChunks,
       fileType: dto.fileType,
       uploadId: dto.uploadId,
+      fileKey: fileKey, // Pass the stored file key if it exists
       metadata: dto.metadata ? JSON.parse(dto.metadata) : undefined,
     });
 
@@ -62,9 +66,10 @@ export class UploadService {
         uploadedChunks: 0,
         status: 'uploading',
         userId,
+        fileKey: signedUrlResponse.chunkKey, // Store the file key for future chunk uploads
         metadata: dto.metadata ? JSON.parse(dto.metadata) : undefined,
       });
-      this.logger.log(`Created upload record: ${upload.id}`);
+      this.logger.log(`Created upload record: ${upload.id} with file key: ${signedUrlResponse.chunkKey}`);
     } else {
       this.logger.log(`Updating existing upload record: ${upload.id}`);
       await this.uploadRepository.updateByUploadId(dto.uploadId, {
@@ -106,6 +111,7 @@ export class UploadService {
       chunkUrls: dto.chunkUrls,
       fileType: upload.fileType,
       finalUrl: dto.finalUrl,
+      fileKey: upload.fileKey,
       metadata: dto.metadata ? JSON.parse(dto.metadata) : undefined,
     });
 

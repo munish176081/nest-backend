@@ -46,8 +46,10 @@ export class R2Service implements IR2Service {
   async generateSignedUrl(request: IUploadRequest): Promise<ISignedUrlResponse> {
     const uploadId = request.uploadId || uuidv4();
     
-    // Generate unique file path
-    const fileKey = this.generateUniqueFileKey(request.fileName, uploadId, request.fileType);
+    // Use the provided file key or generate a new one
+    const fileKey = request.fileKey || this.generateUniqueFileKey(request.fileName, uploadId, request.fileType);
+    
+    this.logger.log(`Generating signed URL with file key: ${fileKey} (provided: ${!!request.fileKey})`);
     
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
@@ -74,8 +76,10 @@ export class R2Service implements IR2Service {
   }
 
   async completeUpload(request: ICompleteUploadRequest): Promise<string> {
-    // Use the same unique file path that was generated during the initial upload
-    const fileKey = this.generateUniqueFileKey(request.fileName, request.uploadId, request.fileType || 'image');
+    // Use the provided file key or generate a new one if not provided (for backward compatibility)
+    const fileKey = request.fileKey || this.generateUniqueFileKey(request.fileName, request.uploadId, request.fileType || 'image');
+    
+    this.logger.log(`Using file key: ${fileKey} (provided: ${!!request.fileKey})`);
     
     // Generate a public URL using the custom CDN domain
     const publicCdn = this.configService.get<string>('R2_PUBLIC_CDN', 'https://cdn.pups4sale.com.au');
@@ -88,16 +92,22 @@ export class R2Service implements IR2Service {
 
   async deleteFile(fileUrl: string): Promise<void> {
     try {
+      this.logger.log(`Attempting to delete file: ${fileUrl}`);
+      
       const key = this.extractKeyFromUrl(fileUrl);
+      this.logger.log(`Extracted key for deletion: ${key}`);
+      
       const command = new DeleteObjectCommand({
         Bucket: this.bucketName,
         Key: key,
       });
 
+      this.logger.log(`Sending delete command to R2 for bucket: ${this.bucketName}, key: ${key}`);
       await this.s3Client.send(command);
-      this.logger.log(`Deleted file: ${key}`);
+      this.logger.log(`Successfully deleted file from R2: ${key}`);
     } catch (error) {
       this.logger.error(`Failed to delete file: ${fileUrl}`, error);
+      this.logger.error(`Error details: ${error.message}`);
       throw error;
     }
   }
@@ -157,6 +167,15 @@ export class R2Service implements IR2Service {
   private extractKeyFromUrl(fileUrl: string): string {
     // Extract the key from the R2 URL
     const url = new URL(fileUrl);
-    return url.pathname.substring(1); // Remove leading slash
+    const pathname = url.pathname;
+    
+    // Remove leading slash and return the path
+    // For URLs like: https://cdn.pups4sale.com.au/uploads/images/2025/08/filename.jpg
+    // We want to extract: uploads/images/2025/08/filename.jpg
+    const key = pathname.startsWith('/') ? pathname.substring(1) : pathname;
+    
+    this.logger.log(`Extracted key from URL: ${fileUrl} -> ${key}`);
+    
+    return key;
   }
 } 

@@ -39,6 +39,9 @@ export class Upload {
   @Column({ type: 'varchar', length: 2000, nullable: true })
   finalUrl: string;
 
+  @Column({ type: 'varchar', length: 2000, nullable: true })
+  fileKey: string;
+
   @Column({ type: 'jsonb', nullable: true })
   chunkUrls: string[];
 
