@@ -1,5 +1,4 @@
 import { ExternalAuthAccount } from '../../authentication/entities/external-auth-accounts.entity';
-import { Listing } from '../../listings/entities/listing.entity';
 import {
   Column,
   CreateDateColumn,
@@ -50,8 +49,8 @@ export class User {
   )
   externalAccounts: ExternalAuthAccount[];
 
-  @OneToMany(() => Listing, (listing) => listing.user)
-  listings: Listing[];
+  @OneToMany('Listing', (listing: any) => listing.user)
+  listings: any[];
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: string;

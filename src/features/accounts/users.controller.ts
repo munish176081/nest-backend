@@ -54,7 +54,7 @@ export class UsersController {
     @Req() req: Request,
     @Body() createListingDto: CreateListingDto,
   ) {
-    return await this.listingsService.createListing(req.user.id, createListingDto);
+    return await this.listingsService.createListing(createListingDto, req.user.id);
   }
 
   @UseGuards(LoggedInGuard)

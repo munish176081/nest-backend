@@ -6,12 +6,14 @@ import { ListingsRepository } from './listings.repository';
 import { Listing } from './entities/listing.entity';
 import { AuthModule } from '../authentication/authentication.module';
 import { UsersModule } from '../accounts/users.module';
+import { BreedsModule } from '../breeds/breeds.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Listing]),
     AuthModule,
     forwardRef(() => UsersModule),
+    BreedsModule,
   ],
   controllers: [ListingsController],
   providers: [ListingsService, ListingsRepository],

@@ -4,14 +4,19 @@ import { CreateListingDto, UpdateListingDto } from './dto';
 import { QueryListingDto, SearchListingDto } from './dto/query-listing.dto';
 import { Listing, ListingStatusEnum, ListingTypeEnum, ListingAvailabilityEnum } from './entities/listing.entity';
 import { ListingResponseDto, ListingSummaryDto, PaginatedListingsResponseDto } from './dto/response-listing.dto';
+import { BreedsService } from '../breeds/breeds.service';
+import { calculateAge } from '../../helpers/date';
+import { UsersService } from '../accounts/users.service';
 
 @Injectable()
 export class ListingsService {
   constructor(
     private readonly listingsRepository: ListingsRepository,
+    private readonly breedsService: BreedsService,
+    private readonly usersService: UsersService,
   ) { }
 
-  async createListing(userId: string, createListingDto: CreateListingDto): Promise<ListingResponseDto> {
+  async createListing(createListingDto: CreateListingDto, userId: string): Promise<ListingResponseDto> {
     // Validate listing type and category
     this.validateListingTypeAndCategory(createListingDto.type, createListingDto.category);
 
@@ -30,16 +35,17 @@ export class ListingsService {
       ...createListingDto.metadata, // Preserve all frontend metadata (including parent images/videos) - spread last to avoid overwrites
     };
 
-    // Debug: Log the metadata to see what's being saved
-    console.log('🔍 CreateListing Metadata Debug:', {
-      originalMetadata: createListingDto.metadata,
-      finalMetadata: metadata,
-      motherImages: metadata.motherImages,
-      fatherImages: metadata.fatherImages
-    });
-
     // Calculate expiration date based on listing type
     const expiresAt = this.calculateExpirationDate(createListingDto.type, createListingDto.expiresAt);
+
+    // Get breed name if breedId is provided
+    let breedName = createListingDto.breed;
+    if (createListingDto.breedId) {
+      const breed = await this.breedsService.findById(createListingDto.breedId);
+      if (breed) {
+        breedName = breed.name;
+      }
+    }
 
     const listingData: Partial<Listing> = {
       userId,
@@ -50,7 +56,8 @@ export class ListingsService {
       fields: processedFields,
       metadata,
       price: createListingDto.price,
-      breed: createListingDto.breed,
+      breed: breedName, // Use the breed name
+      breedId: createListingDto.breedId, // Store the breed ID for relation
       location: createListingDto.location,
       expiresAt,
       startedOrRenewedAt: new Date(),
@@ -88,37 +95,29 @@ export class ListingsService {
       ...updateListingDto.metadata, // Preserve all frontend metadata (including parent images/videos) - spread last to avoid overwrites
     };
 
-    // Debug: Log the metadata to see what's being saved
-    console.log('🔍 UpdateListing Metadata Debug:', {
-      existingMetadata: listing.metadata,
-      newMetadata: updateListingDto.metadata,
-      finalMetadata: metadata,
-      motherImages: metadata.motherImages,
-      fatherImages: metadata.fatherImages
-    });
+    // Get breed name if breedId is being updated
+    let breedName = updateListingDto.breed;
+    if (updateListingDto.breedId && updateListingDto.breedId !== listing.breedId) {
+      const breed = await this.breedsService.findById(updateListingDto.breedId);
+      if (breed) {
+        breedName = breed.name;
+      }
+    }
 
     // Update specific fields if provided
-    if (updateListingDto.contactInfo) {
-      metadata.contactInfo = updateListingDto.contactInfo;
-    }
-    if (updateListingDto.images) {
-      metadata.images = updateListingDto.images;
-    }
-    if (updateListingDto.videos) {
-      metadata.videos = updateListingDto.videos;
-    }
-    if (updateListingDto.documents) {
-      metadata.documents = updateListingDto.documents;
-    }
-    if (updateListingDto.tags) {
-      metadata.tags = updateListingDto.tags;
-    }
+    if (updateListingDto.title !== undefined) listing.title = updateListingDto.title;
+    if (updateListingDto.description !== undefined) listing.description = updateListingDto.description;
+    if (updateListingDto.price !== undefined) listing.price = updateListingDto.price;
+    if (updateListingDto.breed !== undefined) listing.breed = updateListingDto.breed;
+    if (updateListingDto.breedId !== undefined) listing.breedId = updateListingDto.breedId;
+    if (updateListingDto.location !== undefined) listing.location = updateListingDto.location;
 
     const updateData: Partial<Listing> = {
       title: updateListingDto.title,
       description: updateListingDto.description,
       price: updateListingDto.price,
-      breed: updateListingDto.breed,
+      breed: breedName || updateListingDto.breed,
+      breedId: updateListingDto.breedId,
       location: updateListingDto.location,
       fields: processedFields,
       metadata,
@@ -194,7 +193,7 @@ export class ListingsService {
 
   async getListingById(listingId: string, incrementView = false, userId?: string): Promise<ListingResponseDto> {
     const listing = await this.listingsRepository.findById(listingId, true);
-
+    
     if (!listing) {
       throw new NotFoundException('Listing not found');
     }
@@ -207,6 +206,8 @@ export class ListingsService {
     if (incrementView && listing.status === ListingStatusEnum.ACTIVE) {
       await this.listingsRepository.incrementViewCount(listingId);
     }
+
+    console.log(userId, listing.userId, "userId DEBUG");
 
     return this.transformToListingResponse(listing);
   }
@@ -309,9 +310,15 @@ export class ListingsService {
   }
 
   private async processListingFields(type: ListingTypeEnum, fields: Record<string, any>): Promise<Record<string, any>> {
-    // Add type-specific field processing here
-    // For now, just return the fields as-is
-    return fields;
+    // Process fields to add calculated values
+    const processedFields = { ...fields };
+    
+    // Calculate age from dateOfBirth if present
+    if (processedFields.dateOfBirth) {
+      processedFields.age = calculateAge(processedFields.dateOfBirth);
+    }
+    
+    return processedFields;
   }
 
 
@@ -350,7 +357,28 @@ export class ListingsService {
     }
   }
 
-  private transformToListingResponse(listing: Listing): ListingResponseDto {
+  private async transformToListingResponse(listing: Listing): Promise<ListingResponseDto> {
+    // Calculate age from dateOfBirth if present in fields
+    let calculatedAge = '';
+    if (listing.fields?.dateOfBirth) {
+      calculatedAge = calculateAge(listing.fields.dateOfBirth);
+    }
+
+    const user = await this.usersService.getUserById(listing.userId);
+    
+    // Transform user object to only include necessary fields
+    const transformedUser = user ? {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      imageUrl: user.imageUrl,
+    } : null;
+    
+    const transformedFields = {
+      ...listing.fields,
+      age: calculatedAge || listing.fields?.age || '',
+    };
+    
     return {
       id: listing.id,
       userId: listing.userId,
@@ -359,10 +387,13 @@ export class ListingsService {
       category: listing.category,
       title: listing.title,
       description: listing.description,
-      fields: listing.fields,
+      fields: transformedFields,
+      age: calculatedAge || listing.fields?.age || '',
       metadata: listing.metadata,
       price: listing.price,
       breed: listing.breed,
+      breedId: listing.breedId,
+      breedName: listing.breedRelation?.name || listing.breed,
       location: listing.location,
       expiresAt: listing.expiresAt,
       startedOrRenewedAt: listing.startedOrRenewedAt,
@@ -380,11 +411,23 @@ export class ListingsService {
       availability: listing.availability,
       motherInfo: listing.motherInfo,
       fatherInfo: listing.fatherInfo,
-      user: listing.user,
+      user: transformedUser,
     };
   }
 
   private transformToListingSummary(listing: Listing): ListingSummaryDto {
+    // Calculate age from dateOfBirth if present in fields
+    let calculatedAge = '';
+    if (listing.fields?.dateOfBirth) {
+      calculatedAge = calculateAge(listing.fields.dateOfBirth);
+    }
+    
+    // Transform user object to only include necessary fields
+    const transformedUser = listing.user ? {
+      id: listing.user.id,
+      name: listing.user.name,
+    } : null;
+    
     return {
       id: listing.id,
       type: listing.type,
@@ -393,6 +436,8 @@ export class ListingsService {
       title: listing.title,
       price: listing.price,
       breed: listing.breed,
+      breedId: listing.breedId,
+      breedName: listing.breedRelation?.name || listing.breed,
       location: listing.location,
       featuredImage: listing.metadata?.images?.[0] || null,
       metadata: listing.metadata || {},
@@ -402,7 +447,9 @@ export class ListingsService {
       isPremium: listing.isPremium,
       createdAt: listing.createdAt,
       availability: listing.availability,
-      user: listing.user,
+      user: transformedUser,
+      // Add calculated age to summary
+      age: calculatedAge || listing.fields?.age || '',
     };
   }
 } 

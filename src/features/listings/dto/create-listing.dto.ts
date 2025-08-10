@@ -97,6 +97,10 @@ export class CreateListingDto {
 
   @IsOptional()
   @IsString()
+  breedId?: string;
+
+  @IsOptional()
+  @IsString()
   location?: string;
 
   @IsOptional()

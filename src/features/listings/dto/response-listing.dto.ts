@@ -27,6 +27,9 @@ export class ListingResponseDto {
   fields: Record<string, any>;
 
   @Expose()
+  age: string;
+
+  @Expose()
   metadata: Record<string, any>;
 
   @Expose()
@@ -34,6 +37,13 @@ export class ListingResponseDto {
 
   @Expose()
   breed: string;
+
+  @Expose()
+  breedId?: string;
+
+  @Expose()
+  @Transform(({ obj }) => obj.breedRelation?.name || obj.breed)
+  breedName: string;
 
   @Expose()
   location: string;
@@ -87,7 +97,6 @@ export class ListingResponseDto {
   availability: ListingAvailabilityEnum;
 
   @Expose()
-  @Transform(({ value }) => value?.name || value?.email || null)
   user?: {
     id: string;
     name: string;
@@ -119,6 +128,16 @@ export class ListingSummaryDto {
   breed: string;
 
   @Expose()
+  breedId?: string;
+
+  @Expose()
+  @Transform(({ obj }) => obj.breedRelation?.name || obj.breed)
+  breedName: string;
+
+  @Expose()
+  age?: string;
+
+  @Expose()
   location: string;
 
   @Expose()
@@ -147,7 +166,6 @@ export class ListingSummaryDto {
   availability: ListingAvailabilityEnum;
 
   @Expose()
-  @Transform(({ value }) => value?.name || null)
   user?: {
     id: string;
     name: string;

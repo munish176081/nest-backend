@@ -57,6 +57,10 @@ export class QueryListingDto {
   userId?: string;
 
   @IsOptional()
+  @IsString()
+  excludeId?: string;
+
+  @IsOptional()
   @IsNumber()
   @Type(() => Number)
   page?: number = 1;

@@ -17,8 +17,9 @@ export class ListingsRepository {
     return await this.listingRepository.save(listing);
   }
 
-  async findById(id: string, includeUser = false): Promise<Listing | null> {
-    const query = this.listingRepository.createQueryBuilder('listing');
+  async findById(id: string, includeUser = true): Promise<Listing | null> {
+    const query = this.listingRepository.createQueryBuilder('listing')
+      .leftJoinAndSelect('listing.breedRelation', 'breed');
     
     if (includeUser) {
       query.leftJoinAndSelect('listing.user', 'user');
@@ -33,6 +34,8 @@ export class ListingsRepository {
     includeDrafts?: boolean;
   }): Promise<Listing[]> {
     const query = this.listingRepository.createQueryBuilder('listing')
+      .leftJoinAndSelect('listing.user', 'user')
+      .leftJoinAndSelect('listing.breedRelation', 'breed')
       .where('listing.userId = :userId', { userId });
 
     // Always exclude deleted listings unless specifically requested
@@ -94,6 +97,7 @@ export class ListingsRepository {
 
     const queryBuilder = this.listingRepository.createQueryBuilder('listing')
       .leftJoinAndSelect('listing.user', 'user')
+      .leftJoinAndSelect('listing.breedRelation', 'breed')
       .where('listing.status = :status', { status: ListingStatusEnum.ACTIVE })
       .andWhere('(listing.expiresAt IS NULL OR listing.expiresAt > NOW())')
       .andWhere(
@@ -164,42 +168,36 @@ export class ListingsRepository {
   }
 
   async findExpiredListings(): Promise<Listing[]> {
-    return await this.listingRepository.find({
-      where: {
-        expiresAt: Not(IsNull()),
-        status: ListingStatusEnum.ACTIVE,
-      },
-    });
+    return await this.listingRepository.createQueryBuilder('listing')
+      .leftJoinAndSelect('listing.user', 'user')
+      .leftJoinAndSelect('listing.breedRelation', 'breed')
+      .where('listing.expiresAt IS NOT NULL')
+      .andWhere('listing.status = :status', { status: ListingStatusEnum.ACTIVE })
+      .getMany();
   }
 
   async findFeaturedListings(limit = 10): Promise<Listing[]> {
-    return await this.listingRepository.find({
-      where: {
-        isFeatured: true,
-        status: ListingStatusEnum.ACTIVE,
-        isActive: true,
-      },
-      relations: ['user'],
-      order: {
-        createdAt: 'DESC',
-      },
-      take: limit,
-    });
+    return await this.listingRepository.createQueryBuilder('listing')
+      .leftJoinAndSelect('listing.user', 'user')
+      .leftJoinAndSelect('listing.breedRelation', 'breed')
+      .where('listing.isFeatured = :isFeatured', { isFeatured: true })
+      .andWhere('listing.status = :status', { status: ListingStatusEnum.ACTIVE })
+      .andWhere('listing.isActive = :isActive', { isActive: true })
+      .orderBy('listing.createdAt', 'DESC')
+      .take(limit)
+      .getMany();
   }
 
   async findPremiumListings(limit = 10): Promise<Listing[]> {
-    return await this.listingRepository.find({
-      where: {
-        isPremium: true,
-        status: ListingStatusEnum.ACTIVE,
-        isActive: true,
-      },
-      relations: ['user'],
-      order: {
-        createdAt: 'DESC',
-      },
-      take: limit,
-    });
+    return await this.listingRepository.createQueryBuilder('listing')
+      .leftJoinAndSelect('listing.user', 'user')
+      .leftJoinAndSelect('listing.breedRelation', 'breed')
+      .where('listing.isPremium = :isPremium', { isPremium: true })
+      .andWhere('listing.status = :status', { status: ListingStatusEnum.ACTIVE })
+      .andWhere('listing.isActive = :isActive', { isActive: true })
+      .orderBy('listing.createdAt', 'DESC')
+      .take(limit)
+      .getMany();
   }
 
   async getListingStats(userId?: string): Promise<{
@@ -244,7 +242,8 @@ export class ListingsRepository {
 
   private buildQueryBuilder(queryDto: QueryListingDto): SelectQueryBuilder<Listing> {
     const queryBuilder = this.listingRepository.createQueryBuilder('listing')
-      .leftJoinAndSelect('listing.user', 'user');
+      .leftJoinAndSelect('listing.user', 'user')
+      .leftJoinAndSelect('listing.breedRelation', 'breed');
 
     // Base filters
     if (queryDto.status) {
@@ -318,6 +317,11 @@ export class ListingsRepository {
     // User filter
     if (queryDto.userId) {
       queryBuilder.andWhere('listing.userId = :userId', { userId: queryDto.userId });
+    }
+
+    // Exclude specific listing ID
+    if (queryDto.excludeId) {
+      queryBuilder.andWhere('listing.id != :excludeId', { excludeId: queryDto.excludeId });
     }
 
     return queryBuilder;
