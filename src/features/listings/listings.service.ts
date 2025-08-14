@@ -436,6 +436,7 @@ export class ListingsService {
       title: listing.title,
       price: listing.price,
       breed: listing.breed,
+      description: listing.description,
       breedId: listing.breedId,
       breedName: listing.breedRelation?.name || listing.breed,
       location: listing.location,

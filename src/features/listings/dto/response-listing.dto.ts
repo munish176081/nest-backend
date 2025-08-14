@@ -125,6 +125,9 @@ export class ListingSummaryDto {
   price: number;
 
   @Expose()
+  description: string;
+
+  @Expose()
   breed: string;
 
   @Expose()
