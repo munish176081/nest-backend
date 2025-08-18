@@ -85,6 +85,46 @@ export class SessionService {
   }
 
   /**
+   * Gets session data by session ID
+   * This is used for WebSocket authentication
+   */
+  async getSession(sessionId: string): Promise<any> {
+    try {
+      const sessionKey = `sess:${sessionId}`;
+      const sessionData = await this.redis.get(sessionKey);
+      
+      if (sessionData) {
+        const session = JSON.parse(sessionData);
+        return session;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting session:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Verifies if a session is valid and returns the user data
+   * This is used for WebSocket authentication
+   */
+  async verifySession(sessionId: string): Promise<any> {
+    try {
+      const session = await this.getSession(sessionId);
+      
+      if (session && session.passport?.user) {
+        return session.passport.user;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error verifying session:', error);
+      return null;
+    }
+  }
+
+  /**
    * Helper method to update a specific session if it contains the target user
    */
   private async updateSessionIfContainsUser(sessionKey: string, userId: string, user: User): Promise<void> {

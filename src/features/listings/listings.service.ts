@@ -23,6 +23,16 @@ export class ListingsService {
     // Process and validate dynamic fields based on listing type
     const processedFields = createListingDto.fields ? await this.processListingFields(createListingDto.type, createListingDto.fields) : {};
 
+    // Debug logging for fields data
+    console.log('🔍 Creating listing with fields:', {
+      originalFields: createListingDto.fields,
+      processedFields: processedFields,
+      badges: processedFields.badges,
+      dnaResults: processedFields.dnaResults,
+      hasBadges: Array.isArray(processedFields.badges),
+      hasDnaResults: Array.isArray(processedFields.dnaResults)
+    });
+
     // Build metadata object - preserve all metadata from DTO and merge with backend fields
     const metadata: Record<string, any> = {
       contactInfo: createListingDto.contactInfo,
@@ -87,6 +97,17 @@ export class ListingsService {
     let processedFields = listing.fields;
     if (updateListingDto.fields) {
       processedFields = await this.processListingFields(listing.type, updateListingDto.fields);
+      
+      // Debug logging for updated fields
+      console.log('🔍 Updating listing with fields:', {
+        originalFields: listing.fields,
+        newFields: updateListingDto.fields,
+        processedFields: processedFields,
+        badges: processedFields.badges,
+        dnaResults: processedFields.dnaResults,
+        hasBadges: Array.isArray(processedFields.badges),
+        hasDnaResults: Array.isArray(processedFields.dnaResults)
+      });
     }
 
     // Handle metadata updates - preserve all metadata from DTO and merge with existing metadata
@@ -378,7 +399,7 @@ export class ListingsService {
       ...listing.fields,
       age: calculatedAge || listing.fields?.age || '',
     };
-    
+
     return {
       id: listing.id,
       userId: listing.userId,

@@ -137,6 +137,29 @@ export class ListingsController {
     return await this.listingsService.getListingById(id, incrementView === 'true');
   }
 
+  // Test endpoint to debug badges and DNA results
+  @Get(':id/debug')
+  async getListingDebug(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<any> {
+    const listing = await this.listingsService.getListingById(id, false);
+    
+    // Return raw data for debugging
+    return {
+      message: 'Debug data for listing',
+      listingId: id,
+      rawFields: listing.fields,
+      badges: listing.fields?.badges,
+      dnaResults: listing.fields?.dnaResults,
+      hasBadges: Array.isArray(listing.fields?.badges),
+      hasDnaResults: Array.isArray(listing.fields?.dnaResults),
+      badgesCount: listing.fields?.badges?.length || 0,
+      dnaResultsCount: listing.fields?.dnaResults?.length || 0,
+      fieldsKeys: Object.keys(listing.fields || {}),
+      fullResponse: listing
+    };
+  }
+
   // Increment favorite count
   @Post(':id/favorite')
   @HttpCode(HttpStatus.NO_CONTENT)
