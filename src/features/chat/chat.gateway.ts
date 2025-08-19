@@ -267,51 +267,26 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     }
   }
 
-  @SubscribeMessage('typing_start')
-  async handleTypingStart(
-    @MessageBody() data: { conversationId: string },
+  @SubscribeMessage('typing')
+  async handleTyping(
+    @MessageBody() data: { conversationId: string; isTyping: boolean },
     @ConnectedSocket() client: Socket,
   ) {
     try {
       const connectedUser = this.connectedUsers.get(client.id);
       if (!connectedUser) return;
 
-      const { conversationId } = data;
-      
+      const { conversationId, isTyping } = data;
+
       // Broadcast typing indicator to conversation room (excluding sender)
       client.to(`conversation_${conversationId}`).emit('user_typing', {
         conversationId,
         userId: connectedUser.userId,
         username: connectedUser.user.username,
-        isTyping: true,
+        isTyping,
       });
-
     } catch (error) {
-      console.error('ChatGateway: Error handling typing start:', error);
-    }
-  }
-
-  @SubscribeMessage('typing_stop')
-  async handleTypingStop(
-    @MessageBody() data: { conversationId: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    try {
-      const connectedUser = this.connectedUsers.get(client.id);
-      if (!connectedUser) return;
-
-      const { conversationId } = data;
-      
-      // Broadcast typing stop to conversation room (excluding sender)
-      client.to(`conversation_${conversationId}`).emit('user_typing', {
-        conversationId,
-        userId: connectedUser.userId,
-        username: connectedUser.user.username,
-        isTyping: false,
-      });
-
-    } catch (error) {
-      console.error('ChatGateway: Error handling typing stop:', error);
+      console.error('ChatGateway: Error handling typing event:', error);
     }
   }
 

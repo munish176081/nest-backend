@@ -1,12 +1,40 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, Req, BadRequestException } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { LoggedInGuard } from '../../middleware/LoggedInGuard';
 import { CreateConversationDto, SendMessageDto, UpdateConversationDto } from './dto';
 import { Request as ExpressRequest } from 'express';
+import { User } from '../accounts/entities/account.entity';
 
 @Controller('chat')
+
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
+
+  @Post('initiate')
+  @UseGuards(LoggedInGuard)
+  async initiateChat(
+    @Body('listingId') listingId: string,
+    @Request() req,
+  ) {
+    console.log('🎯 INITIATE CHAT: Controller called with listingId:', listingId);
+    console.log('🎯 INITIATE CHAT: User from request:', req.user?.id);
+    
+    if (!listingId) {
+      console.error('🎯 INITIATE CHAT: Missing listingId');
+      throw new BadRequestException('listingId is required');
+    }
+    
+    console.log('🎯 INITIATE CHAT: Calling findOrCreateConversation...');
+    const conversation = await this.chatService.findOrCreateConversation(listingId, req.user.id);
+    console.log('🎯 INITIATE CHAT: Conversation result:', {
+      id: conversation?.id,
+      participantsCount: conversation?.participants?.length,
+      hasMetadata: !!conversation?.metadata,
+      hasLastMessage: !!conversation?.lastMessage
+    });
+    
+    return { conversationId: conversation.id };
+  }
 
   @Get('conversations')
   @UseGuards(LoggedInGuard)
@@ -47,13 +75,24 @@ export class ChatController {
     @Query('offset') offset = '0',
     @Request() req,
   ) {
+    console.log('🎯 GET MESSAGES: Controller called for conversation:', conversationId);
+    console.log('🎯 GET MESSAGES: User:', req.user.id, 'Limit:', limit, 'Offset:', offset);
+    
     const userId = req.user.id;
-    return this.chatService.getConversationMessages(
+    const messages = await this.chatService.getConversationMessages(
       conversationId,
       userId,
       parseInt(limit),
       parseInt(offset),
     );
+    
+    console.log('🎯 GET MESSAGES: Found messages:', {
+      count: messages?.length,
+      messageTypes: messages?.map(m => m.message_type),
+      hasListingReferences: messages?.map(m => !!m.listing_reference)
+    });
+    
+    return messages;
   }
 
   @Post('conversations/:id/messages')

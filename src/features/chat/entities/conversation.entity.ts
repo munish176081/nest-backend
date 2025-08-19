@@ -46,6 +46,25 @@ export class Conversation {
     subject?: string;
     tags?: string[];
     priority?: 'low' | 'medium' | 'high';
+    listingDetails?: {
+      id: string;
+      title: string;
+      price: number;
+      location: string;
+      breed: string;
+    };
+    participants?: {
+      buyer?: {
+        id: string;
+        name: string;
+        joinedPlatform: string | Date;
+      };
+      seller?: {
+        id: string;
+        name: string;
+        joinedPlatform: string | Date;
+      };
+    };
   };
 
   @CreateDateColumn()

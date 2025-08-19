@@ -10,6 +10,8 @@ import { CreateConversationDto, SendMessageDto, UpdateConversationDto } from './
 import { UsersService } from '../accounts/users.service';
 import { ListingsService } from '../listings/listings.service';
 // import { ChatWebSocketService } from './chat-websocket.service'; // Removed to break circular dependency
+import { ListingsRepository } from '../listings/listings.repository';
+import { User } from '../accounts/entities/account.entity';
 
 @Injectable()
 export class ChatService {
@@ -20,10 +22,13 @@ export class ChatService {
     private messageRepository: Repository<Message>,
     @InjectRepository(Participant)
     private participantRepository: Repository<Participant>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     private usersService: UsersService,
     private listingsService: ListingsService,
     private moduleRef: ModuleRef,
     private eventEmitter: EventEmitter2,
+    private listingsRepository: ListingsRepository,
     // Removed ChatWebSocketService to break circular dependency
   ) {}
 
@@ -108,6 +113,7 @@ export class ChatService {
       .createQueryBuilder('conversation')
       .leftJoinAndSelect('conversation.participants', 'participants')
       .leftJoinAndSelect('conversation.listing', 'listing')
+      .leftJoinAndSelect('conversation.lastMessage', 'lastMessage')
       .where('conversation.id = :id', { id })
       .getOne();
 
@@ -683,6 +689,181 @@ export class ChatService {
     // If ChatWebSocketService is needed, it must be re-introduced and injected.
     console.warn('ChatService: getTypingUsers called, but ChatWebSocketService is not available.');
     return [];
+  }
+
+  async findOrCreateConversation(listingId: string, buyerId: string): Promise<Conversation> {
+    console.log('🎯 FIND OR CREATE: Called with listingId:', listingId, 'buyerId:', buyerId);
+    
+    const listing = await this.listingsRepository.findById(listingId);
+    console.log('🎯 FIND OR CREATE: Listing found:', !!listing, listing ? `sellerId: ${listing.userId}` : 'No listing');
+    
+    if (!listing) {
+      throw new NotFoundException('Listing not found');
+    }
+
+    const sellerId = listing.userId;
+    console.log('🎯 FIND OR CREATE: Seller ID:', sellerId);
+
+    // Check if a conversation already exists
+    console.log('🎯 FIND OR CREATE: Checking for existing conversation...');
+    const existingConversation = await this.conversationRepository.createQueryBuilder('conversation')
+      .leftJoinAndSelect('conversation.participants', 'participants')
+      .leftJoinAndSelect('conversation.lastMessage', 'lastMessage')
+      .innerJoin('conversation.participants', 'p1')
+      .innerJoin('conversation.participants', 'p2')
+      .where('conversation.listing_id = :listingId', { listingId })
+      .andWhere('p1.user_id = :buyerId', { buyerId })
+      .andWhere('p2.user_id = :sellerId', { sellerId })
+      .getOne();
+
+    if (existingConversation) {
+      console.log('🎯 FIND OR CREATE: Found existing conversation:', existingConversation.id);
+      console.log('🎯 FIND OR CREATE: Existing conversation has messages:', !!existingConversation.lastMessage);
+      
+      // If existing conversation has no messages, create the initial message
+      if (!existingConversation.lastMessage) {
+        console.log('🎯 FIND OR CREATE: Existing conversation has no messages, creating initial message...');
+        
+        const initialMessage = this.messageRepository.create({
+          conversation_id: existingConversation.id,
+          sender_id: buyerId,
+          content: `Hi! I'm interested in your ${listing.title}. Could you please provide more information?`,
+          message_type: MessageType.LISTING,
+          listing_reference: {
+            listingId: listing.id,
+            title: listing.title,
+            price: Number(listing.price) || 0,
+            image: listing.metadata?.images?.[0] || '',
+            location: listing.location || ''
+          }
+        });
+
+        await this.messageRepository.save(initialMessage);
+        console.log('🎯 FIND OR CREATE: Initial message saved for existing conversation:', initialMessage.id);
+
+        // Update conversation's last message
+        await this.updateConversationLastMessage(existingConversation.id, initialMessage.id);
+        
+        // Re-fetch conversation with updated lastMessage
+        const updatedConversation = await this.conversationRepository
+          .createQueryBuilder('conversation')
+          .leftJoinAndSelect('conversation.participants', 'participants')
+          .leftJoinAndSelect('conversation.lastMessage', 'lastMessage')
+          .where('conversation.id = :id', { id: existingConversation.id })
+          .getOne();
+          
+        return updatedConversation || existingConversation;
+      }
+      
+      return existingConversation;
+    }
+
+    console.log('🎯 FIND OR CREATE: No existing conversation found, creating new one...');
+
+    // Fetch user information for both buyer and seller
+    console.log('🎯 FIND OR CREATE: Fetching user information...');
+    const [buyer, seller] = await Promise.all([
+      this.userRepository.findOne({ where: { id: buyerId } }),
+      this.userRepository.findOne({ where: { id: sellerId } })
+    ]);
+
+    console.log('🎯 FIND OR CREATE: Users found - Buyer:', !!buyer, 'Seller:', !!seller);
+    if (!buyer || !seller) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Create a new conversation
+    const newConversation = this.conversationRepository.create({
+      listing_id: listingId,
+      conversation_type: ConversationType.LISTING,
+      subject: `Inquiry about ${listing.title}`,
+      metadata: {
+        subject: `Inquiry about ${listing.title}`,
+        listingDetails: {
+          id: listing.id,
+          title: listing.title,
+          price: listing.price,
+          location: listing.location,
+          breed: listing.breed
+        },
+        participants: {
+          buyer: {
+            id: buyerId,
+            name: buyer.name || buyer.username,
+            joinedPlatform: buyer.createdAt
+          },
+          seller: {
+            id: sellerId,
+            name: seller.name || seller.username,
+            joinedPlatform: seller.createdAt
+          }
+        }
+      }
+    });
+
+    const savedConversation = await this.conversationRepository.save(newConversation);
+
+    // Create participants separately
+    const participants = [
+      this.participantRepository.create({
+        conversation_id: savedConversation.id,
+        user_id: buyerId,
+        name: buyer.name || buyer.username,
+        avatar: buyer.imageUrl,
+        role: ParticipantRole.BUYER
+      }),
+      this.participantRepository.create({
+        conversation_id: savedConversation.id,
+        user_id: sellerId,
+        name: seller.name || seller.username,
+        avatar: seller.imageUrl,
+        role: ParticipantRole.SELLER
+      })
+    ];
+
+    await this.participantRepository.save(participants);
+    console.log('🎯 FIND OR CREATE: Participants saved successfully');
+
+    // Auto-send initial inquiry message with listing details
+    console.log('🎯 FIND OR CREATE: Creating initial message...');
+    const initialMessage = this.messageRepository.create({
+      conversation_id: savedConversation.id,
+      sender_id: buyerId,
+      content: `Hi! I'm interested in your ${listing.title}. Could you please provide more information?`,
+      message_type: MessageType.LISTING,
+      listing_reference: {
+        listingId: listing.id,
+        title: listing.title,
+        price: Number(listing.price) || 0,
+        image: listing.metadata?.images?.[0] || '',
+        location: listing.location || ''
+      }
+    });
+
+    await this.messageRepository.save(initialMessage);
+    console.log('🎯 FIND OR CREATE: Initial message saved with ID:', initialMessage.id);
+
+    // Update conversation's last message
+    console.log('🎯 FIND OR CREATE: Updating conversation last message...');
+    await this.updateConversationLastMessage(savedConversation.id, initialMessage.id);
+
+    // Return the conversation with participants populated
+    console.log('🎯 FIND OR CREATE: Fetching final conversation with relations...');
+    const conversationWithParticipants = await this.conversationRepository
+      .createQueryBuilder('conversation')
+      .leftJoinAndSelect('conversation.participants', 'participants')
+      .leftJoinAndSelect('conversation.lastMessage', 'lastMessage')
+      .where('conversation.id = :id', { id: savedConversation.id })
+      .getOne();
+
+    console.log('🎯 FIND OR CREATE: Final conversation:', {
+      id: conversationWithParticipants?.id,
+      participantsCount: conversationWithParticipants?.participants?.length,
+      hasLastMessage: !!conversationWithParticipants?.lastMessage,
+      hasMetadata: !!conversationWithParticipants?.metadata
+    });
+
+    return conversationWithParticipants || savedConversation;
   }
 
   /**

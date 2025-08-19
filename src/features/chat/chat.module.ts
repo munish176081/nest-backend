@@ -11,10 +11,11 @@ import { Participant } from './entities/participant.entity';
 import { UsersModule } from '../accounts/users.module';
 import { ListingsModule } from '../listings/listings.module';
 import { AuthModule } from '../authentication/authentication.module';
+import { User } from '../accounts/entities/account.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Conversation, Message, Participant]),
+    TypeOrmModule.forFeature([Conversation, Message, Participant, User]),
     EventEmitterModule.forRoot(),
     UsersModule,
     ListingsModule,
