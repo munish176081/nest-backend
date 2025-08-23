@@ -117,7 +117,6 @@ export class ChatService {
       .where('conversation.id = :id', { id })
       .getOne();
 
-    console.log('SUSHIL', conversation);
 
     if (!conversation) {
       throw new NotFoundException('Conversation not found');
@@ -243,6 +242,27 @@ export class ChatService {
     };
 
     console.log('ChatService: Successfully created conversation:', conversationResponse.id, 'with participants:', conversationResponse.participants.length);
+    
+    // Emit conversation_created event for WebSocket broadcasting
+    try {
+      const eventPayload = {
+        conversation: conversationResponse,
+        participants: conversationResponse.participants,
+        timestamp: new Date(),
+      };
+      
+      console.log('ChatService: Emitting chat.conversation.created event with payload:', {
+        conversationId: conversationResponse.id,
+        participantCount: conversationResponse.participants.length,
+        participants: conversationResponse.participants.map(p => ({ userId: p.userId, name: p.name }))
+      });
+      
+      this.eventEmitter.emit('chat.conversation.created', eventPayload);
+      console.log('ChatService: Conversation created event emitted for WebSocket broadcasting');
+    } catch (error) {
+      console.warn('ChatService: Event emission failed, but conversation was created:', error);
+    }
+    
     return conversationResponse;
   }
 
@@ -404,10 +424,6 @@ export class ChatService {
   }
 
   async sendMessage(conversationId: string, sendMessageDto: SendMessageDto, userId: string) {
-    console.log('ChatService: sendMessage called with:', { conversationId, sendMessageDto, userId });
-    console.log('ChatService: conversationId type:', typeof conversationId, 'value:', conversationId);
-    console.log('ChatService: userId type:', typeof userId, 'value:', userId);
-    
     // Verify user is a participant in this conversation using a simple query
     const participant = await this.participantRepository.findOne({
       where: { conversation_id: conversationId, user_id: userId }
@@ -417,7 +433,6 @@ export class ChatService {
       throw new ForbiddenException('You are not a participant in this conversation');
     }
 
-    console.log('ChatService: User is participant, creating message...');
 
     // Create and save the message
     const message = this.messageRepository.create({
@@ -451,12 +466,12 @@ export class ChatService {
         senderId: userId,
         timestamp: new Date(),
       });
-      console.log('ChatService: Message event emitted for WebSocket broadcasting');
+      console.log('ChatService: Message event emitted for WebSocket broadcasting debug new message:', savedMessage);
     } catch (error) {
-      console.warn('ChatService: Event emission failed, but message was saved:', error);
+      console.warn('ChatService: Event emission failed, but message was saved debug new message:', error);
     }
 
-    console.log('ChatService: sendMessage completed successfully');
+    console.log('ChatService: sendMessage completed successfully debug new message:', savedMessage);
     return savedMessage;
   }
 
@@ -755,6 +770,7 @@ export class ChatService {
         return updatedConversation || existingConversation;
       }
       
+      console.log('🎯 FIND OR CREATE: Returning existing conversation without event emission');
       return existingConversation;
     }
 
@@ -862,6 +878,31 @@ export class ChatService {
       hasLastMessage: !!conversationWithParticipants?.lastMessage,
       hasMetadata: !!conversationWithParticipants?.metadata
     });
+
+    // Emit conversation_created event for WebSocket broadcasting (only for new conversations)
+    try {
+      const eventPayload = {
+        conversation: conversationWithParticipants || savedConversation,
+        participants: participants.map(p => ({
+          userId: p.user_id,
+          name: p.name,
+          avatar: p.avatar,
+          role: p.role
+        })),
+        timestamp: new Date(),
+      };
+      
+      console.log('🎯 FIND OR CREATE: Emitting chat.conversation.created event with payload:', {
+        conversationId: (conversationWithParticipants || savedConversation).id,
+        participantCount: participants.length,
+        participants: participants.map(p => ({ userId: p.user_id, name: p.name }))
+      });
+      
+      this.eventEmitter.emit('chat.conversation.created', eventPayload);
+      console.log('🎯 FIND OR CREATE: Conversation created event emitted for WebSocket broadcasting');
+    } catch (error) {
+      console.warn('🎯 FIND OR CREATE: Event emission failed, but conversation was created:', error);
+    }
 
     return conversationWithParticipants || savedConversation;
   }

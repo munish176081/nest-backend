@@ -41,7 +41,7 @@ import { ChatModule } from './features/chat/chat.module';
           synchronize: true, // Enabled
           entities: [ExternalAuthAccount, User, Upload, Listing, Breed, Conversation, Message, Participant],
           namingStrategy: new SnakeCaseNamingStrategy(),
-          logging: !isProduction,
+          logging: false,
     
           // ✅ Final working setup: one ssl object only
           ssl: {
