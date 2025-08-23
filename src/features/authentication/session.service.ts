@@ -91,13 +91,17 @@ export class SessionService {
   async getSession(sessionId: string): Promise<any> {
     try {
       const sessionKey = `sess:${sessionId}`;
+      console.log('SessionService: Looking up session with key:', sessionKey);
       const sessionData = await this.redis.get(sessionKey);
+      console.log('SessionService: Raw Redis data:', sessionData);
       
       if (sessionData) {
         const session = JSON.parse(sessionData);
+        console.log('SessionService: Parsed session:', session);
         return session;
       }
       
+      console.log('SessionService: No session data found in Redis');
       return null;
     } catch (error) {
       console.error('Error getting session:', error);
@@ -111,12 +115,16 @@ export class SessionService {
    */
   async verifySession(sessionId: string): Promise<any> {
     try {
+      console.log('SessionService: Verifying session ID:', sessionId);
       const session = await this.getSession(sessionId);
+      console.log('SessionService: Raw session data:', session);
       
       if (session && session.passport?.user) {
+        console.log('SessionService: Found user in session:', session.passport.user);
         return session.passport.user;
       }
       
+      console.log('SessionService: No valid user found in session');
       return null;
     } catch (error) {
       console.error('Error verifying session:', error);

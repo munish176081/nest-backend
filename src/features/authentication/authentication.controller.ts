@@ -267,4 +267,31 @@ export class AuthController {
       res.status(201).json(null);
     });
   }
+
+  @Get('session')
+  async getSession(@Req() req: Request) {
+    // Check if user is authenticated
+    if (!req.isAuthenticated()) {
+      throw new UnauthorizedException('User not authenticated');
+    }
+
+    // Get session ID from the token cookie
+    const tokenCookie = req.headers.cookie
+      ?.split(';')
+      .find(cookie => cookie.trim().startsWith('token='))
+      ?.split('=')[1];
+
+    if (!tokenCookie) {
+      throw new UnauthorizedException('No session token found');
+    }
+
+    // Decode the URL-encoded token
+    const decodedToken = decodeURIComponent(tokenCookie);
+    
+    return {
+      sessionId: decodedToken,
+      userId: req.user?.id,
+      authenticated: true
+    };
+  }
 }
