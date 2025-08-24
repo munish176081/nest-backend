@@ -298,12 +298,15 @@ export class UploadService {
       'application/x-perl', 'application/x-shellscript'
     ];
 
-    if (blockedMimeTypes.includes(mimeType)) {
+    // Extract base mime type (remove codec specifications like ;codecs=opus)
+    const baseMimeType = mimeType.split(';')[0].trim();
+
+    if (blockedMimeTypes.includes(baseMimeType)) {
       throw new BadRequestException(`File type not allowed for security reasons: ${mimeType}`);
     }
 
     const allowedTypes = allowedMimeTypes[fileType];
-    if (!allowedTypes.includes(mimeType)) {
+    if (!allowedTypes.includes(baseMimeType)) {
       throw new BadRequestException(`Invalid file type for ${fileType}: ${mimeType}. Allowed types: ${allowedTypes.join(', ')}`);
     }
   }
