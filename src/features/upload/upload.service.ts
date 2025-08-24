@@ -280,7 +280,9 @@ export class UploadService {
         'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
         'text/plain', // .txt
         'text/csv', // .csv
-        'application/rtf' // .rtf
+        'application/rtf', // .rtf
+        // Audio file types for voice messages
+        'audio/webm', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/m4a', 'audio/aac'
       ],
     };
 
