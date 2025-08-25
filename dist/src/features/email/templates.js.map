@@ -1,0 +1,1 @@
+{"version":3,"file":"templates.js","sourceRoot":"","sources":["../../../../src/features/email/templates.ts"],"names":[],"mappings":";;;AAAa,QAAA,sBAAsB,GAAG;IACpC,iBAAiB,EAAE,oCAAoC;IACvD,aAAa,EAAE,oCAAoC;IACnD,wBAAwB,EAAE,oCAAoC;IAC9D,oBAAoB,EAAE,oCAAoC;IAC1D,WAAW,EAAE,oCAAoC;IACjD,cAAc,EAAE,oCAAoC;CACrD,CAAC;AACW,QAAA,MAAM,GAAG;IACpB,IAAI,EAAE,oHAAoH;CAC3H,CAAC"}
