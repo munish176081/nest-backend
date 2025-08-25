@@ -134,7 +134,7 @@ export const configConfiguration = () => {
       host: process.env.REDIS_HOST,
       port: parseInt(process.env.REDIS_PORT || '6379'),
       tokenCache: {
-        db: 1,
+        db: 0,
       },
     },
     contact: {

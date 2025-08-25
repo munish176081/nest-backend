@@ -11,7 +11,7 @@ export class SessionService {
 
   constructor(private readonly configService: ConfigService) {
     this.redis = new Redis(this.configService.get('redis.url'), {
-      db: 1,
+      db: 0, // Use the same database as express-session
       ...(this.configService.get('cloudProvider') === 'heroku' && {
         tls: {
           rejectUnauthorized: false,
@@ -90,15 +90,91 @@ export class SessionService {
    */
   async getSession(sessionId: string): Promise<any> {
     try {
-      const sessionKey = `sess:${sessionId}`;
-      console.log('SessionService: Looking up session with key:', sessionKey);
-      const sessionData = await this.redis.get(sessionKey);
-      console.log('SessionService: Raw Redis data:', sessionData);
+      console.log('SessionService: Original sessionId received:', sessionId);
+      console.log('SessionService: Session ID type:', typeof sessionId);
+      console.log('SessionService: Session ID length:', sessionId?.length);
       
-      if (sessionData) {
-        const session = JSON.parse(sessionData);
-        console.log('SessionService: Parsed session:', session);
-        return session;
+      // Try to decode the sessionId if it's URL encoded
+      let decodedSessionId = sessionId;
+      try {
+        if (sessionId && typeof sessionId === 'string') {
+          decodedSessionId = decodeURIComponent(sessionId);
+          if (decodedSessionId !== sessionId) {
+            console.log('SessionService: SessionId was URL encoded, decoded to:', decodedSessionId);
+          }
+        }
+      } catch (decodeError) {
+        console.log('SessionService: Could not decode sessionId, using as-is');
+        decodedSessionId = sessionId;
+      }
+      
+      // Try different session ID formats
+      let sessionKeys = [];
+      
+      // Format 1: Direct session ID (most common)
+      sessionKeys.push(`sess:${decodedSessionId}`);
+      
+      // Format 2: If sessionId starts with 's:', try without it
+      if (decodedSessionId && decodedSessionId.startsWith('s:')) {
+        sessionKeys.push(`sess:${decodedSessionId.substring(2)}`);
+      }
+      
+      // Format 3: If sessionId contains a dot, try the part before the dot (signature removal)
+      if (decodedSessionId && decodedSessionId.includes('.')) {
+        const beforeDot = decodedSessionId.split('.')[0];
+        sessionKeys.push(`sess:${beforeDot}`);
+      }
+      
+      // Format 4: If sessionId starts with 's:' and contains a dot, try both combinations
+      if (decodedSessionId && decodedSessionId.startsWith('s:') && decodedSessionId.includes('.')) {
+        const withoutPrefix = decodedSessionId.substring(2);
+        const beforeDot = withoutPrefix.split('.')[0];
+        sessionKeys.push(`sess:${beforeDot}`);
+      }
+      
+      // Format 5: Try with the original sessionId as-is (in case it's already the full key)
+      if (decodedSessionId && !decodedSessionId.startsWith('sess:')) {
+        sessionKeys.push(`sess:${decodedSessionId}`);
+      }
+      
+      // Format 6: If sessionId already starts with 'sess:', use it directly
+      if (decodedSessionId && decodedSessionId.startsWith('sess:')) {
+        sessionKeys.push(decodedSessionId);
+      }
+      
+      // Format 7: Try the sessionId as-is (in case it's a complete key without 'sess:' prefix)
+      if (decodedSessionId && !decodedSessionId.startsWith('sess:')) {
+        // This might be the case where the sessionId is the actual Redis key
+        sessionKeys.push(decodedSessionId);
+      }
+      
+      console.log('SessionService: Trying session keys:', sessionKeys);
+      
+      // Try each key format
+      for (const sessionKey of sessionKeys) {
+        console.log('SessionService: Trying Redis key:', sessionKey);
+        const sessionData = await this.redis.get(sessionKey);
+        
+        if (sessionData) {
+          console.log('SessionService: Found session data with key:', sessionKey);
+          const session = JSON.parse(sessionData);
+          console.log('SessionService: Parsed session:', session);
+          return session;
+        }
+      }
+      
+      // If no session found, let's see what keys exist in Redis
+      const allSessionKeys = await this.redis.keys('sess:*');
+      console.log('SessionService: All available session keys in Redis:', allSessionKeys.slice(0, 10));
+      
+      // Let's also check if there are any keys that might match our sessionId
+      if (decodedSessionId) {
+        const matchingKeys = allSessionKeys.filter(key => 
+          key.includes(decodedSessionId) || 
+          key.includes(decodedSessionId.replace('s:', '')) ||
+          key.includes(decodedSessionId.split('.')[0])
+        );
+        console.log('SessionService: Potentially matching keys:', matchingKeys);
       }
       
       console.log('SessionService: No session data found in Redis');
@@ -116,11 +192,13 @@ export class SessionService {
   async verifySession(sessionId: string): Promise<any> {
     try {
       console.log('SessionService: Verifying session ID:', sessionId);
+      console.log('SessionService: Session ID type:', typeof sessionId);
+      console.log('SessionService: Session ID length:', sessionId?.length);
+      
       const session = await this.getSession(sessionId);
-      console.log('SessionService: Raw session data:', session);
+      console.log('SessionService: Raw session data:', session.passport.user);
       
       if (session && session.passport?.user) {
-        console.log('SessionService: Found user in session:', session.passport.user);
         return session.passport.user;
       }
       

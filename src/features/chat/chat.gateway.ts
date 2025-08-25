@@ -87,30 +87,40 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       
       // If no sessionId in auth, try to extract from cookies
       if (!sessionId && client.handshake.headers.cookie) {
-        // console.log('ChatGateway: Checking cookies for session ID');
+        console.log('DUBUG: Checking cookies for session ID');
+        console.log('DUBUG: Raw cookie header:', client.handshake.headers.cookie);
+        
         const cookies = client.handshake.headers.cookie.split(';');
+        console.log('DUBUG: Parsed cookies:', cookies);
+        
         for (const cookie of cookies) {
           const [name, value] = cookie.trim().split('=');
+          console.log('DUBUG: Processing cookie:', name, '=', value);
           
           // Check for both 'token' and 'connect.sid' cookies
           if (name === 'token' || name === 'connect.sid') {
             sessionId = decodeURIComponent(value); // Decode URL encoded value
+            console.log('DUBUG: Found session cookie:', name, '=', value);
+            console.log('DUBUG: Decoded sessionId:', sessionId);
             break;
           }
         }
       }
       
-             // Remove the 's:' prefix from session ID regardless of source
-       if (sessionId && sessionId.startsWith('s:')) {
-         sessionId = sessionId.substring(2); // Remove the 's:' prefix
-         // console.log('ChatGateway: Removed s: prefix from session ID');
-       }
-       
-       // Remove the signature part (everything after the dot) from session ID
-       if (sessionId && sessionId.includes('.')) {
-         sessionId = sessionId.split('.')[0]; // Keep only the part before the dot
-         // console.log('ChatGateway: Removed signature from session ID');
-       }
+      console.log('DUBUG: Original sessionId from handshake:', sessionId);
+      console.log('DUBUG: Handshake auth:', client.handshake.auth);
+      console.log('DUBUG: Handshake headers:', client.handshake.headers);
+      
+      // Only remove the 's:' prefix if it exists, but keep the rest intact
+      if (sessionId && sessionId.startsWith('s:')) {
+        sessionId = sessionId.substring(2); // Remove the 's:' prefix
+        console.log('DUBUG: Removed s: prefix, sessionId now:', sessionId);
+      }
+
+      // Don't remove the signature part - let the session service handle it
+      // The session service will try multiple formats
+      
+      console.log('DUBUG: Final sessionId being sent to session service:', sessionId);
       
       // console.log('ChatGateway: Extracted sessionId:', sessionId);
       
@@ -218,12 +228,6 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       // Join user to their personal room
       await client.join(`user_${user.id}`);
       
-      console.log('ChatGateway: Client connected successfully:', {
-        socketId: client.id,
-        userId: user.id,
-        username: user.username,
-      });
-
       // Broadcast user online status to all connected clients
       this.server.emit('user_status_changed', {
         userId: user.id,
@@ -263,12 +267,9 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     @MessageBody() data: { conversationId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    console.log('ChatGateway: join_conversation received:', data, 'from client:', client.id);
     try {
       const connectedUser = this.connectedUsers.get(client.id);
-      console.log('ChatGateway: Connected user for join_conversation:', connectedUser);
       if (!connectedUser) {
-        console.log('ChatGateway: User not authenticated for join_conversation');
         client.emit('error', { message: 'User not authenticated' });
         return;
       }
@@ -280,11 +281,6 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       const isAlreadyInRoom = client.rooms.has(roomName);
       
       if (isAlreadyInRoom) {
-        console.log('ChatGateway: User already in conversation room:', {
-          userId: connectedUser.userId,
-          conversationId,
-          socketId: client.id,
-        });
         client.emit('joined_conversation', { conversationId });
         return;
       }
@@ -551,13 +547,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       senderId,
     });
     try {
-      console.log('ChatGateway: Notifying receiver about new message:', {
-        conversationId,
-        senderId,
-        messageId: message.id
-      });
-
-      // Get all participants in the conversation room
+      
       const roomName = `conversation_${conversationId}`;
       const socketsInRoom = await this.server.in(roomName).fetchSockets();
       
@@ -573,7 +563,6 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
       receiverSockets.forEach(socket => {
         const connectedUser = this.connectedUsers.get(socket.id);
         if (connectedUser) {
-          console.log('ChatGateway: Sending new_message_received to user:', connectedUser.userId);
           
           socket.emit('new_message_received', {
             conversationId,
@@ -603,8 +592,6 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
           if (socket && !socket.rooms.has(roomName)) {
             // Check if this user should be notified about this conversation
             // You might want to add logic here to check if user is part of this conversation
-            console.log('ChatGateway: Sending new_message_received to online user not in room:', connectedUser.userId);
-            
             socket.emit('new_message_received', {
               conversationId,
               message: {
