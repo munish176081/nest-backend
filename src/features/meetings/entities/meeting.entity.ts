@@ -28,13 +28,16 @@ export class Meeting {
 
   @Column({
     type: 'enum',
-    enum: ['pending', 'confirmed', 'cancelled', 'completed', 'expired'],
+    enum: ['pending', 'confirmed', 'cancelled', 'completed', 'expired', 'rescheduled', 'no_show', 'cancelled_by_buyer', 'cancelled_by_seller', 'cancelled_by_user'],
     default: 'pending'
   })
   status: string;
 
   @Column({ nullable: true })
   googleMeetLink?: string;
+
+  @Column({ nullable: true })
+  calendarEventId?: string;
 
   @Column({ nullable: true })
   notes?: string;

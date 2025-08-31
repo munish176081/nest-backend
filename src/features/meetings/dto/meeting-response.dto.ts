@@ -50,6 +50,9 @@ export class MeetingResponseDto {
   googleMeetLink?: string;
 
   @Expose()
+  calendarEventId?: string;
+
+  @Expose()
   notes?: string;
 
   @Expose()
