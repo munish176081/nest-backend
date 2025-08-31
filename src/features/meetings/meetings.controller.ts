@@ -21,13 +21,14 @@ export class MeetingsController {
   constructor(private readonly meetingsService: MeetingsService) {}
 
   @Post()
-  async createMeeting(@Body() createMeetingDto: CreateMeetingDto, @Request() req) {
+  async createMeeting(@Body() body: CreateMeetingDto & { access_token?: string; refresh_token?: string }, @Request() req) {
     const userId = req.user?.id;
     if (!userId) {
       throw new BadRequestException('User not authenticated');
     }
 
-    return this.meetingsService.createMeeting(createMeetingDto, userId);
+    const { access_token, refresh_token, ...createMeetingDto } = body;
+    return this.meetingsService.createMeeting(createMeetingDto, userId, access_token, refresh_token);
   }
 
   @Get()
@@ -100,6 +101,16 @@ export class MeetingsController {
     }
 
     return this.meetingsService.confirmMeeting(id, userId);
+  }
+
+  @Put(':id/reject')
+  async rejectMeeting(@Param('id') id: string, @Request() req) {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new BadRequestException('User not authenticated');
+    }
+
+    return this.meetingsService.rejectMeeting(id, userId);
   }
 
   @Put(':id/cancel')

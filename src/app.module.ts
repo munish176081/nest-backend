@@ -13,6 +13,7 @@ import { Conversation } from './features/chat/entities/conversation.entity';
 import { Message } from './features/chat/entities/message.entity';
 import { Participant } from './features/chat/entities/participant.entity';
 import { Meeting } from './features/meetings/entities/meeting.entity';
+import { UserCalendarTokens } from './features/meetings/entities/user-calendar-tokens.entity';
 // Temporarily commented out to avoid schema conflicts
 // import { ListingType } from './features/listings/entities/listing-type.entity';
 // import { ListingFile } from './features/listings/entities/listing-file.entity';
@@ -41,7 +42,7 @@ import { MeetingsModule } from './features/meetings/meetings.module';
           type: 'postgres',
           url: configService.get('dbUrl'),
           synchronize: true, // Enabled
-          entities: [ExternalAuthAccount, User, Upload, Listing, Breed, Conversation, Message, Participant, Meeting],
+          entities: [ExternalAuthAccount, User, Upload, Listing, Breed, Conversation, Message, Participant, Meeting, UserCalendarTokens],
           namingStrategy: new SnakeCaseNamingStrategy(),
           logging: false,
     
