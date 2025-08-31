@@ -41,7 +41,7 @@ import { MeetingsModule } from './features/meetings/meetings.module';
         return {
           type: 'postgres',
           url: configService.get('dbUrl'),
-          synchronize: true, // Enabled
+          synchronize: true, // Enabled for development
           entities: [ExternalAuthAccount, User, Upload, Listing, Breed, Conversation, Message, Participant, Meeting, UserCalendarTokens],
           namingStrategy: new SnakeCaseNamingStrategy(),
           logging: false,
