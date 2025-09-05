@@ -33,7 +33,7 @@ POST /api/v1/listings
     "breed": "Labrador",
     "age": "8 weeks",
     "price": 1500,
-    "microchipNumber": "123456789",
+    "microchipNumber": ["123456789", "987654321"],
     "vaccinationStatus": "Fully Vaccinated",
     "contactName": "John Doe",
     "contactEmail": "john@example.com",
@@ -250,7 +250,7 @@ GET /api/v1/listings/stats/global
 ### 2. PUPPY_LISTING
 - **Category**: puppy
 - **Default Expiration**: 90 days
-- **Required Fields**: title, breed, dateOfBirth, puppyGender, pricePerPuppy, microchipNumber, vaccinationStatus, registrationNumber, puppyImages, deliveryOptions
+- **Required Fields**: title, breed, dateOfBirth, puppyGender, pricePerPuppy, microchipNumber (array), vaccinationStatus, registrationNumber, puppyImages, deliveryOptions
 
 ### 3. STUD_LISTING
 - **Category**: breeding

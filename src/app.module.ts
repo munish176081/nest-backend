@@ -14,6 +14,7 @@ import { Message } from './features/chat/entities/message.entity';
 import { Participant } from './features/chat/entities/participant.entity';
 import { Meeting } from './features/meetings/entities/meeting.entity';
 import { UserCalendarTokens } from './features/meetings/entities/user-calendar-tokens.entity';
+import { Wishlist } from './features/wishlist/entities/wishlist.entity';
 // Temporarily commented out to avoid schema conflicts
 // import { ListingType } from './features/listings/entities/listing-type.entity';
 // import { ListingFile } from './features/listings/entities/listing-file.entity';
@@ -27,6 +28,7 @@ import { ListingsModule } from './features/listings/listings.module';
 import { BreedsModule } from './features/breeds/breeds.module';
 import { ChatModule } from './features/chat/chat.module';
 import { MeetingsModule } from './features/meetings/meetings.module';
+import { WishlistModule } from './features/wishlist/wishlist.module';
 
 
 @Module({
@@ -42,7 +44,7 @@ import { MeetingsModule } from './features/meetings/meetings.module';
           type: 'postgres',
           url: configService.get('dbUrl'),
           synchronize: true, // Enabled for development
-          entities: [ExternalAuthAccount, User, Upload, Listing, Breed, Conversation, Message, Participant, Meeting, UserCalendarTokens],
+          entities: [ExternalAuthAccount, User, Upload, Listing, Breed, Conversation, Message, Participant, Meeting, UserCalendarTokens, Wishlist],
           namingStrategy: new SnakeCaseNamingStrategy(),
           logging: false,
     
@@ -67,6 +69,7 @@ import { MeetingsModule } from './features/meetings/meetings.module';
     BreedsModule,
     ChatModule,
     MeetingsModule,
+    WishlistModule,
   ],
   providers: [],
 })
