@@ -43,7 +43,7 @@ import { WishlistModule } from './features/wishlist/wishlist.module';
         return {
           type: 'postgres',
           url: configService.get('dbUrl'),
-          synchronize: true, // Enabled for development
+          synchronize: true, // Re-enabled after fixing database
           entities: [ExternalAuthAccount, User, Upload, Listing, Breed, Conversation, Message, Participant, Meeting, UserCalendarTokens, Wishlist],
           namingStrategy: new SnakeCaseNamingStrategy(),
           logging: false,

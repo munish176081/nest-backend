@@ -443,6 +443,16 @@ export class ListingsService {
       calculatedAge = calculateAge(listing.fields.dateOfBirth);
     }
     
+    // Debug logging for user relation
+    console.log('🔍 Transform debug:', {
+      listingId: listing.id,
+      listingUserId: listing.userId,
+      userRelation: listing.user,
+      hasUser: !!listing.user,
+      userName: listing.user?.name,
+      userEmail: listing.user?.email
+    });
+    
     // Transform user object to only include necessary fields
     const transformedUser = listing.user ? {
       id: listing.user.id,

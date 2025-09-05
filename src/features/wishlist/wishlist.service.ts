@@ -87,7 +87,10 @@ export class WishlistService {
       take: limit,
     });
 
-    const items = wishlistItems.map(item => ({
+    // Filter out items where the listing has been deleted
+    const validItems = wishlistItems.filter(item => item.listing !== null);
+    
+    const items = validItems.map(item => ({
       id: item.id,
       userId: item.userId,
       listingId: item.listingId,
@@ -104,7 +107,7 @@ export class WishlistService {
 
     return {
       items,
-      total,
+      total, // Use original total count for pagination
       page,
       limit,
       hasMore: (page * limit) < total,
@@ -139,4 +142,5 @@ export class WishlistService {
 
     return !!wishlist;
   }
+
 }

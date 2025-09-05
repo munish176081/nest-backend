@@ -211,7 +211,7 @@ export class Listing {
 
   // Relationships
   @ManyToOne(() => User, (user) => user.listings, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'userId' })
+  @JoinColumn({ name: 'user_id' })
   user: User;
 
   @ManyToOne(() => Breed, { nullable: true })

@@ -68,6 +68,10 @@ export class ListingsRepository {
 
     const queryBuilder = this.buildQueryBuilder(queryDto);
     
+    // Debug: Log the generated SQL
+    console.log('🔍 Generated SQL:', queryBuilder.getSql());
+    console.log('🔍 Query parameters:', queryBuilder.getParameters());
+    
     const [listings, total] = await queryBuilder
       .skip(skip)
       .take(limit)
