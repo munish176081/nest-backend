@@ -38,5 +38,7 @@ export class SendMessageDto {
     price: number;
     image: string;
     location: string;
+    breed?: string;
+    fields?: Record<string, any>;
   };
 } 

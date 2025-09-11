@@ -480,6 +480,7 @@ export class ListingsService {
       createdAt: listing.createdAt,
       availability: listing.availability,
       user: transformedUser,
+      fields: listing.fields,
       // Add calculated age to summary
       age: calculatedAge || listing.fields?.age || '',
     };

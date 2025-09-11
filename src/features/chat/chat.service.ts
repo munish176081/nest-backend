@@ -451,6 +451,11 @@ export class ChatService {
     // Update conversation's last message
     await this.updateConversationLastMessage(conversationId, savedMessage.id);
 
+    // If this is a listing message, update conversation metadata with listing details
+    if (sendMessageDto.messageType === 'listing' && sendMessageDto.listingReference) {
+      await this.updateConversationMetadataWithListing(conversationId, sendMessageDto.listingReference);
+    }
+
     // Increment unread count for other participants
     await this.incrementUnreadCountForOthers(conversationId, userId);
 
@@ -649,6 +654,47 @@ export class ChatService {
     }
   }
 
+  async updateConversationMetadataWithListing(conversationId: string, listingReference: any) {
+    try {
+      // Get the current conversation
+      const conversation = await this.conversationRepository.findOne({ 
+        where: { id: conversationId } 
+      });
+      
+      if (!conversation) {
+        console.warn('Conversation not found for metadata update:', conversationId);
+        return;
+      }
+
+      // Update the metadata with listing details including fields
+      const updatedMetadata = {
+        ...conversation.metadata,
+        listingDetails: {
+          id: listingReference.listingId,
+          title: listingReference.title,
+          price: listingReference.price,
+          location: listingReference.location,
+          breed: listingReference.breed || 'Unknown',
+          fields: listingReference.fields || {}
+        }
+      };
+
+      // Update the conversation with new metadata
+      await this.conversationRepository.update(conversationId, {
+        metadata: updatedMetadata,
+        updatedAt: new Date(),
+      });
+
+      console.log('Conversation metadata updated with listing details:', {
+        conversationId,
+        listingId: listingReference.listingId,
+        hasFields: !!listingReference.fields
+      });
+    } catch (error) {
+      console.error('Error updating conversation metadata with listing:', error);
+    }
+  }
+
   async incrementUnreadCountForOthers(conversationId: string, senderId: string) {
     // Get all participants except sender
     const participants = await this.participantRepository
@@ -747,11 +793,15 @@ export class ChatService {
           listing_reference: {
             listingId: listing.id,
             title: listing.title,
+            fields: listing.fields || {},
             price: Number(listing.price) || 0,
             image: listing.metadata?.images?.[0] || '',
             location: listing.location || ''
           }
         });
+
+        console.log('🎯 FIND OR CREATE: Initial message:', initialMessage);
+        return ;
 
         await this.messageRepository.save(initialMessage);
         console.log('🎯 FIND OR CREATE: Initial message saved for existing conversation:', initialMessage.id);
@@ -797,6 +847,7 @@ export class ChatService {
         subject: `Inquiry about ${listing.title}`,
         listingDetails: {
           id: listing.id,
+          fields: listing.fields || {},
           title: listing.title,
           price: listing.price,
           location: listing.location,
@@ -852,6 +903,7 @@ export class ChatService {
         title: listing.title,
         price: Number(listing.price) || 0,
         image: listing.metadata?.images?.[0] || '',
+        fields: listing.fields || {},
         location: listing.location || ''
       }
     });

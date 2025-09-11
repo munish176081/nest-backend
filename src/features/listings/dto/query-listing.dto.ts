@@ -38,6 +38,10 @@ export class QueryListingDto {
   maxPrice?: number;
 
   @IsOptional()
+  @IsString()
+  priceType?: 'price_on_request' | 'price_range' | 'price_available';
+
+  @IsOptional()
   @IsBoolean()
   @Transform(({ value }) => value === 'true')
   isFeatured?: boolean;
@@ -104,6 +108,10 @@ export class SearchListingDto {
   @IsOptional()
   @IsString()
   location?: string;
+
+  @IsOptional()
+  @IsString()
+  priceType?: 'price_on_request' | 'price_range' | 'price_available';
 
   @IsOptional()
   @IsNumber()

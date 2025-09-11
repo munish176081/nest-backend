@@ -75,9 +75,6 @@ export class ChatController {
     @Query('offset') offset = '0',
     @Request() req,
   ) {
-    console.log('🎯 GET MESSAGES: Controller called for conversation:', conversationId);
-    console.log('🎯 GET MESSAGES: User:', req.user.id, 'Limit:', limit, 'Offset:', offset);
-    
     const userId = req.user.id;
     const messages = await this.chatService.getConversationMessages(
       conversationId,

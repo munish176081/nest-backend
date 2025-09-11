@@ -52,6 +52,7 @@ export class Conversation {
       price: number;
       location: string;
       breed: string;
+      fields?: Record<string, any>;
     };
     participants?: {
       buyer?: {

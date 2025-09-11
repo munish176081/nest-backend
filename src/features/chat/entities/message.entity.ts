@@ -53,6 +53,7 @@ export class Message {
     price: number;
     image: string;
     location: string;
+    fields?: Record<string, any>;
   };
 
   @Column({ default: false })

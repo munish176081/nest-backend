@@ -151,6 +151,9 @@ export class ListingSummaryDto {
   metadata: Record<string, any>;
 
   @Expose()
+  fields: Record<string, any>;
+
+  @Expose()
   viewCount: number;
 
   @Expose()

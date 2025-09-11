@@ -121,6 +121,33 @@ export class ListingsRepository {
       queryBuilder.andWhere('listing.location ILIKE :location', { location: `%${searchDto.location}%` });
     }
 
+    // Price type filter
+    if (searchDto.priceType) {
+      switch (searchDto.priceType) {
+        case 'price_on_request':
+          // Listings with no price or pricingOption set to 'priceOnRequest'
+          queryBuilder.andWhere(
+            '(listing.price IS NULL OR listing.fields->>\'pricingOption\' = \'priceOnRequest\')'
+          );
+          break;
+        case 'price_range':
+          // Listings with pricingOption set to 'displayPriceRange' and both minPrice and maxPrice
+          queryBuilder.andWhere(
+            'listing.fields->>\'pricingOption\' = \'displayPriceRange\' AND ' +
+            'listing.fields->\'minPrice\' IS NOT NULL AND ' +
+            'listing.fields->\'maxPrice\' IS NOT NULL'
+          );
+          break;
+        case 'price_available':
+          // Listings with a fixed price (not null) and not using price range
+          queryBuilder.andWhere(
+            'listing.price IS NOT NULL AND ' +
+            '(listing.fields->>\'pricingOption\' IS NULL OR listing.fields->>\'pricingOption\' != \'displayPriceRange\')'
+          );
+          break;
+      }
+    }
+
     const [listings, total] = await queryBuilder
       .skip(skip)
       .take(limit)
@@ -301,6 +328,33 @@ export class ListingsRepository {
 
     if (queryDto.maxPrice !== undefined) {
       queryBuilder.andWhere('listing.price <= :maxPrice', { maxPrice: queryDto.maxPrice });
+    }
+
+    // Price type filter
+    if (queryDto.priceType) {
+      switch (queryDto.priceType) {
+        case 'price_on_request':
+          // Listings with no price or pricingOption set to 'priceOnRequest'
+          queryBuilder.andWhere(
+            '(listing.price IS NULL OR listing.fields->>\'pricingOption\' = \'priceOnRequest\')'
+          );
+          break;
+        case 'price_range':
+          // Listings with pricingOption set to 'displayPriceRange' and both minPrice and maxPrice
+          queryBuilder.andWhere(
+            'listing.fields->>\'pricingOption\' = \'displayPriceRange\' AND ' +
+            'listing.fields->\'minPrice\' IS NOT NULL AND ' +
+            'listing.fields->\'maxPrice\' IS NOT NULL'
+          );
+          break;
+        case 'price_available':
+          // Listings with a fixed price (not null) and not using price range
+          queryBuilder.andWhere(
+            'listing.price IS NOT NULL AND ' +
+            '(listing.fields->>\'pricingOption\' IS NULL OR listing.fields->>\'pricingOption\' != \'displayPriceRange\')'
+          );
+          break;
+      }
     }
 
     // Featured filter
