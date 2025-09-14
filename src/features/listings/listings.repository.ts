@@ -301,6 +301,11 @@ export class ListingsRepository {
       queryBuilder.andWhere('listing.type = :type', { type: queryDto.type });
     }
 
+    // Types filter (multiple types)
+    if (queryDto.types && queryDto.types.length > 0) {
+      queryBuilder.andWhere('listing.type IN (:...types)', { types: queryDto.types });
+    }
+
     // Category filter
     if (queryDto.category) {
       queryBuilder.andWhere('listing.category = :category', { category: queryDto.category });

@@ -12,6 +12,11 @@ export class QueryListingDto {
   type?: ListingTypeEnum;
 
   @IsOptional()
+  @IsArray()
+  @IsEnum(ListingTypeEnum, { each: true })
+  types?: ListingTypeEnum[];
+
+  @IsOptional()
   @IsString()
   category?: ListingCategoryEnum;
 
