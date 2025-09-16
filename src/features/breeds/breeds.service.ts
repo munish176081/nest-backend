@@ -238,13 +238,13 @@ export class BreedsService {
 
     try {
       const csvContent = file.buffer.toString('utf-8');
-      const lines = csvContent.split('\n').filter(line => line.trim());
+      const rows = this.parseCSVContent(csvContent);
       
-      if (lines.length < 2) {
+      if (rows.length < 2) {
         throw new BadRequestException('CSV must contain at least a header row and one data row');
       }
 
-      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      const headers = rows[0].map(h => h.trim().replace(/"/g, ''));
       const expectedHeaders = [
         'Breed Name',
         'Category', 
@@ -266,12 +266,12 @@ export class BreedsService {
       const errors = [];
       let imported = 0;
 
-      for (let i = 1; i < lines.length; i++) {
+      for (let i = 1; i < rows.length; i++) {
         try {
-          const values = this.parseCSVLine(lines[i]);
+          const values = rows[i];
           
           if (values.length !== headers.length) {
-            errors.push(`Row ${i + 1}: Column count mismatch`);
+            errors.push(`Row ${i + 1}: Column count mismatch (expected ${headers.length}, got ${values.length})`);
             continue;
           }
 
@@ -280,6 +280,28 @@ export class BreedsService {
           // Validate required fields
           if (!breedData.name || !breedData.slug) {
             errors.push(`Row ${i + 1}: Name and URL Slug are required`);
+            continue;
+          }
+
+          // Validate field lengths
+          if (breedData.name && breedData.name.length > 255) {
+            errors.push(`Row ${i + 1}: Name is too long (max 255 characters)`);
+            continue;
+          }
+          if (breedData.slug && breedData.slug.length > 255) {
+            errors.push(`Row ${i + 1}: URL Slug is too long (max 255 characters)`);
+            continue;
+          }
+          if (breedData.category && breedData.category.length > 100) {
+            errors.push(`Row ${i + 1}: Category is too long (max 100 characters)`);
+            continue;
+          }
+          if (breedData.size && breedData.size.length > 50) {
+            errors.push(`Row ${i + 1}: Size is too long (max 50 characters)`);
+            continue;
+          }
+          if (breedData.lifeExpectancy && breedData.lifeExpectancy.length > 50) {
+            errors.push(`Row ${i + 1}: Life Expectancy is too long (max 50 characters)`);
             continue;
           }
 
@@ -350,6 +372,43 @@ export class BreedsService {
     
     result.push(current.trim());
     return result.map(v => v.replace(/^"|"$/g, '')); // Remove surrounding quotes
+  }
+
+  private parseCSVContent(csvContent: string): string[][] {
+    const lines = csvContent.split('\n');
+    const result = [];
+    let currentLine = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      // Check if we're in the middle of a quoted field
+      if (inQuotes) {
+        currentLine += '\n' + line;
+      } else {
+        currentLine = line;
+      }
+      
+      // Count quotes in the current line to determine if we're still in quotes
+      const quoteCount = (currentLine.match(/"/g) || []).length;
+      inQuotes = quoteCount % 2 === 1;
+      
+      // If we're not in quotes, this line is complete
+      if (!inQuotes) {
+        if (currentLine.trim()) {
+          result.push(this.parseCSVLine(currentLine));
+        }
+        currentLine = '';
+      }
+    }
+    
+    // Handle the last line if it doesn't end with a newline
+    if (currentLine.trim()) {
+      result.push(this.parseCSVLine(currentLine));
+    }
+    
+    return result;
   }
 
   private mapCSVRowToBreed(headers: string[], values: string[]): Partial<Breed> {
