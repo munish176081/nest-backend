@@ -29,7 +29,7 @@ export class BreedsController {
   constructor(private readonly breedsService: BreedsService) {}
 
   @Post()
-  @UseGuards(LocalAuthGuard)
+  // @UseGuards(LocalAuthGuard)
   @Serialize(BreedResponseDto)
   create(@Body() createBreedDto: CreateBreedDto) {
     return this.breedsService.create(createBreedDto);
@@ -94,21 +94,21 @@ export class BreedsController {
   }
 
   @Patch(':id')
-  @UseGuards(LocalAuthGuard, ActiveUserGuard)
+  // @UseGuards(LocalAuthGuard, ActiveUserGuard)
   @Serialize(BreedResponseDto)
   update(@Param('id') id: string, @Body() updateBreedDto: UpdateBreedDto) {
     return this.breedsService.update(id, updateBreedDto);
   }
 
   @Delete(':id')
-  @UseGuards(LocalAuthGuard, ActiveUserGuard)
+  // @UseGuards(LocalAuthGuard, ActiveUserGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string) {
     return this.breedsService.delete(id);
   }
 
   @Delete(':id/hard')
-  @UseGuards(LocalAuthGuard, ActiveUserGuard)
+  // @UseGuards(LocalAuthGuard, ActiveUserGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   hardRemove(@Param('id') id: string) {
     return this.breedsService.hardDelete(id);
