@@ -4,8 +4,9 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { LocalAuthGuard } from '../authentication/guards/local-auth.guard';
+import { LoggedInGuard } from '../../middleware/LoggedInGuard';
 import { ActiveUserGuard } from '../../middleware/ActiveUserGuard';
+import { AdminGuard } from '../../middleware/AdminGuard';
 
 interface ActivityLogsQuery {
   page?: number;
@@ -21,7 +22,7 @@ interface ActivityLogsQuery {
 }
 
 @Controller('admin/activity-logs')
-@UseGuards(LocalAuthGuard, ActiveUserGuard)
+@UseGuards(LoggedInGuard, ActiveUserGuard, AdminGuard)
 export class ActivityLogsController {
   constructor() {}
 

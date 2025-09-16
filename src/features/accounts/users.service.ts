@@ -206,6 +206,8 @@ export class UsersService {
     search?: string;
     role?: 'user' | 'admin' | 'super_admin';
   }) {
+    console.log('getUsersForAdmin called with:', { page, limit, search, role });
+    role === undefined && (role = 'user');
     const skip = (page - 1) * limit;
     const whereConditions: any[] = [];
 
@@ -221,20 +223,29 @@ export class UsersService {
       whereConditions.push({ role });
     }
 
-    const [users, total] = await this.userRepo.findAndCount({
-      where: whereConditions.length > 0 ? whereConditions : undefined,
-      skip,
-      take: limit,
-      order: { createdAt: 'DESC' },
-    });
+    console.log('Where conditions:', whereConditions);
 
-    return {
-      users,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+    try {
+      const [users, total] = await this.userRepo.findAndCount({
+        where: whereConditions.length > 0 ? whereConditions : undefined,
+        skip,
+        take: limit,
+        order: { createdAt: 'DESC' },
+      });
+
+      console.log('Database query result:', { usersCount: users.length, total });
+
+      return {
+        users,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      console.error('Database query error:', error);
+      throw error;
+    }
   }
 
   async searchUsersForAdmin({ page = 1, limit = 20, search }: {

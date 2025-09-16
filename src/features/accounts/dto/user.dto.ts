@@ -1,5 +1,6 @@
-import { Expose } from 'class-transformer';
+import { Expose, Exclude } from 'class-transformer';
 
+@Exclude()
 export class UserDto {
   @Expose()
   id: string;

@@ -226,4 +226,168 @@ export class BreedsService {
       .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
       .trim();
   }
+
+  async importFromCSV(file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    if (!file.mimetype.includes('csv') && !file.originalname.endsWith('.csv')) {
+      throw new BadRequestException('File must be a CSV');
+    }
+
+    try {
+      const csvContent = file.buffer.toString('utf-8');
+      const lines = csvContent.split('\n').filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        throw new BadRequestException('CSV must contain at least a header row and one data row');
+      }
+
+      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      const expectedHeaders = [
+        'Breed Name',
+        'Category', 
+        'URL Slug',
+        'Size',
+        'Breed Description',
+        'Temperament',
+        'Life Expectancy',
+        'Sort Order'
+      ];
+
+      // Validate headers
+      const missingHeaders = expectedHeaders.filter(h => !headers.includes(h));
+      if (missingHeaders.length > 0) {
+        throw new BadRequestException(`Missing required headers: ${missingHeaders.join(', ')}`);
+      }
+
+      const breeds = [];
+      const errors = [];
+      let imported = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        try {
+          const values = this.parseCSVLine(lines[i]);
+          
+          if (values.length !== headers.length) {
+            errors.push(`Row ${i + 1}: Column count mismatch`);
+            continue;
+          }
+
+          const breedData = this.mapCSVRowToBreed(headers, values);
+          
+          // Validate required fields
+          if (!breedData.name || !breedData.slug) {
+            errors.push(`Row ${i + 1}: Name and URL Slug are required`);
+            continue;
+          }
+
+          // Check if breed already exists
+          const existingBreed = await this.breedRepository.findOne({
+            where: [
+              { name: breedData.name },
+              { slug: breedData.slug }
+            ]
+          });
+
+          if (existingBreed) {
+            errors.push(`Row ${i + 1}: Breed with name "${breedData.name}" or slug "${breedData.slug}" already exists`);
+            continue;
+          }
+
+          breeds.push(breedData);
+          imported++;
+        } catch (error) {
+          errors.push(`Row ${i + 1}: ${error.message}`);
+        }
+      }
+
+      if (breeds.length === 0) {
+        return {
+          success: false,
+          message: 'No valid breeds to import',
+          imported: 0,
+          errors
+        };
+      }
+
+      // Bulk insert breeds
+      await this.breedRepository.save(breeds);
+
+      return {
+        success: true,
+        message: `Successfully imported ${imported} breeds`,
+        imported,
+        errors
+      };
+
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(`Failed to process CSV: ${error.message}`);
+    }
+  }
+
+  private parseCSVLine(line: string): string[] {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    
+    result.push(current.trim());
+    return result.map(v => v.replace(/^"|"$/g, '')); // Remove surrounding quotes
+  }
+
+  private mapCSVRowToBreed(headers: string[], values: string[]): Partial<Breed> {
+    const breedData: Partial<Breed> = {};
+    
+    for (let i = 0; i < headers.length; i++) {
+      const header = headers[i];
+      const value = values[i]?.trim();
+      
+      switch (header) {
+        case 'Breed Name':
+          breedData.name = value;
+          break;
+        case 'Category':
+          breedData.category = value || null;
+          break;
+        case 'URL Slug':
+          breedData.slug = value;
+          break;
+        case 'Size':
+          breedData.size = value || null;
+          break;
+        case 'Breed Description':
+          breedData.description = value || null;
+          break;
+        case 'Temperament':
+          breedData.temperament = value || null;
+          break;
+        case 'Life Expectancy':
+          breedData.lifeExpectancy = value || null;
+          break;
+        case 'Sort Order':
+          breedData.sortOrder = value ? parseInt(value, 10) || 0 : 0;
+          break;
+      }
+    }
+    
+    breedData.isActive = true;
+    return breedData;
+  }
 } 

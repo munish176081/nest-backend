@@ -120,8 +120,9 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   handleLogin(@Req() req: Request) {
-    // can happen because we are returning from guard GoogleOAuthGuard if there is custom error so that can catch here
-    if (!req.isAuthenticated()) {
+    // The guard should have already validated authentication
+    // If we reach here, the user should be authenticated
+    if (!req.isAuthenticated() || !req.user) {
       throw new UnauthorizedException('Invalid credentials');
     }
 

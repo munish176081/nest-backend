@@ -10,7 +10,10 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { BreedsService } from './breeds.service';
 import { CreateBreedDto } from './dto/create-breed.dto';
 import { UpdateBreedDto } from './dto/update-breed.dto';
@@ -76,6 +79,12 @@ export class BreedsController {
   @Serialize(BreedResponseDto)
   findBySlug(@Param('slug') slug: string) {
     return this.breedsService.findBySlug(slug);
+  }
+
+  @Post('import')
+  @UseInterceptors(FileInterceptor('file'))
+  async importBreeds(@UploadedFile() file: Express.Multer.File) {
+    return this.breedsService.importFromCSV(file);
   }
 
   @Get(':id')

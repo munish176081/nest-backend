@@ -123,4 +123,20 @@ export class UsersController {
     await this.usersService.migrateExistingUsers();
     return { message: 'User migration completed' };
   }
+
+  // Debug endpoint to check current user status
+  @Get('/debug/me')
+  @UseGuards(LoggedInGuard)
+  async getCurrentUserDebug(@Req() req: Request) {
+    return {
+      message: 'Current user debug info (no admin check)',
+      user: req.user,
+      isAuthenticated: req.isAuthenticated(),
+      session: req.session,
+      headers: {
+        authorization: req.headers.authorization,
+        cookie: req.headers.cookie,
+      }
+    };
+  }
 }

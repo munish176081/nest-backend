@@ -8,10 +8,14 @@ import {
   Patch,
   Body,
   Delete,
+  Req,
+  Res,
 } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { UsersService } from './users.service';
-import { LocalAuthGuard } from '../authentication/guards/local-auth.guard';
+import { LoggedInGuard } from '../../middleware/LoggedInGuard';
 import { ActiveUserGuard } from '../../middleware/ActiveUserGuard';
+import { AdminGuard } from '../../middleware/AdminGuard';
 import { Serialize } from '../../transformers/serialize.interceptor';
 import { UserDto } from './dto/user.dto';
 
@@ -32,15 +36,25 @@ interface AdminRoleUpdateDto {
 }
 
 @Controller('admin')
-@UseGuards(LocalAuthGuard, ActiveUserGuard)
+@UseGuards(LoggedInGuard, ActiveUserGuard, AdminGuard)
 export class AdminController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('users')
   @Serialize(UserDto)
-  async getUsers(@Query() query: AdminUsersQuery) {
+  async getUsers(@Query() query: AdminUsersQuery, @Res() res: Response) {
     const { page = 1, limit = 20, search, role } = query;
-    return this.usersService.getUsersForAdmin({ page, limit, search, role });
+    const data = await this.usersService.getUsersForAdmin({ page, limit, search, role });
+    console.log('data', data);
+    
+    // Set cache control headers to prevent caching
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    
+    return res.json(data);
   }
 
   @Get('users/search')
@@ -92,5 +106,41 @@ export class AdminController {
   @Get('dashboard')
   async getDashboardStats() {
     return this.usersService.getDashboardStats();
+  }
+
+  @Get('debug/current-user')
+  async getCurrentUserDebug(@Req() req: Request) {
+    return {
+      message: 'Current user debug info',
+      user: req.user,
+      isAuthenticated: req.isAuthenticated(),
+      session: req.session,
+      headers: {
+        authorization: req.headers.authorization,
+        cookie: req.headers.cookie,
+      }
+    };
+  }
+
+  @Get('debug/users-raw')
+  async getUsersRaw(@Query() query: AdminUsersQuery) {
+    const { page = 1, limit = 20, search, role } = query;
+    
+    try {
+      const result = await this.usersService.getUsersForAdmin({ page, limit, search, role });
+      return {
+        message: 'Raw users data (no serialization)',
+        query: { page, limit, search, role },
+        result,
+        usersCount: result.users.length,
+        total: result.total
+      };
+    } catch (error) {
+      return {
+        message: 'Error fetching users',
+        error: error.message,
+        stack: error.stack
+      };
+    }
   }
 } 
