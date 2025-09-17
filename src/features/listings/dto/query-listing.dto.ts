@@ -47,6 +47,12 @@ export class QueryListingDto {
   priceType?: 'price_on_request' | 'price_range' | 'price_available';
 
   @IsOptional()
+  @IsArray()
+  @IsEnum(['price_on_request', 'price_range', 'price_available'], { each: true })
+  @Transform(({ value }) => Array.isArray(value) ? value : [value].filter(Boolean))
+  priceTypes?: ('price_on_request' | 'price_range' | 'price_available')[];
+
+  @IsOptional()
   @IsBoolean()
   @Transform(({ value }) => value === 'true')
   isFeatured?: boolean;
@@ -117,6 +123,12 @@ export class SearchListingDto {
   @IsOptional()
   @IsString()
   priceType?: 'price_on_request' | 'price_range' | 'price_available';
+
+  @IsOptional()
+  @IsArray()
+  @IsEnum(['price_on_request', 'price_range', 'price_available'], { each: true })
+  @Transform(({ value }) => Array.isArray(value) ? value : [value].filter(Boolean))
+  priceTypes?: ('price_on_request' | 'price_range' | 'price_available')[];
 
   @IsOptional()
   @IsNumber()

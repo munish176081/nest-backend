@@ -121,30 +121,30 @@ export class ListingsRepository {
       queryBuilder.andWhere('listing.location ILIKE :location', { location: `%${searchDto.location}%` });
     }
 
-    // Price type filter
-    if (searchDto.priceType) {
-      switch (searchDto.priceType) {
-        case 'price_on_request':
-          // Listings with no price or pricingOption set to 'priceOnRequest'
-          queryBuilder.andWhere(
-            '(listing.price IS NULL OR listing.fields->>\'pricingOption\' = \'priceOnRequest\')'
-          );
-          break;
-        case 'price_range':
-          // Listings with pricingOption set to 'displayPriceRange' and both minPrice and maxPrice
-          queryBuilder.andWhere(
-            'listing.fields->>\'pricingOption\' = \'displayPriceRange\' AND ' +
-            'listing.fields->\'minPrice\' IS NOT NULL AND ' +
-            'listing.fields->\'maxPrice\' IS NOT NULL'
-          );
-          break;
-        case 'price_available':
-          // Listings with a fixed price (not null) and not using price range
-          queryBuilder.andWhere(
-            'listing.price IS NOT NULL AND ' +
-            '(listing.fields->>\'pricingOption\' IS NULL OR listing.fields->>\'pricingOption\' != \'displayPriceRange\')'
-          );
-          break;
+    // Price type filter - support both single priceType and multiple priceTypes
+    const priceTypes = searchDto.priceTypes || (searchDto.priceType ? [searchDto.priceType] : []);
+    if (priceTypes.length > 0) {
+      const priceTypeConditions = priceTypes.map(priceType => {
+        switch (priceType) {
+          case 'price_on_request':
+            // Listings with no price or pricingOption set to 'priceOnRequest'
+            return '(listing.price IS NULL OR listing.fields->>\'pricingOption\' = \'priceOnRequest\')';
+          case 'price_range':
+            // Listings with pricingOption set to 'displayPriceRange' and both minPrice and maxPrice
+            return 'listing.fields->>\'pricingOption\' = \'displayPriceRange\' AND ' +
+                   'listing.fields->\'minPrice\' IS NOT NULL AND ' +
+                   'listing.fields->\'maxPrice\' IS NOT NULL';
+          case 'price_available':
+            // Listings with a fixed price (not null) and not using price range
+            return 'listing.price IS NOT NULL AND ' +
+                   '(listing.fields->>\'pricingOption\' IS NULL OR listing.fields->>\'pricingOption\' != \'displayPriceRange\')';
+          default:
+            return null;
+        }
+      }).filter(condition => condition !== null);
+
+      if (priceTypeConditions.length > 0) {
+        queryBuilder.andWhere(`(${priceTypeConditions.join(' OR ')})`);
       }
     }
 
