@@ -7,6 +7,7 @@ import { Listing } from './entities/listing.entity';
 import { AuthModule } from '../authentication/authentication.module';
 import { UsersModule } from '../accounts/users.module';
 import { BreedsModule } from '../breeds/breeds.module';
+import { LoggedInGuard } from '../../middleware/LoggedInGuard';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { BreedsModule } from '../breeds/breeds.module';
     BreedsModule,
   ],
   controllers: [ListingsController],
-  providers: [ListingsService, ListingsRepository],
+  providers: [ListingsService, ListingsRepository, LoggedInGuard],
   exports: [ListingsService, ListingsRepository],
 })
 export class ListingsModule {} 

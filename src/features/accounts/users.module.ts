@@ -7,6 +7,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ListingsModule } from '../listings/listings.module';
 import { User } from './entities/account.entity';
 import { AuthModule } from '../authentication/authentication.module';
+import { LoggedInGuard } from '../../middleware/LoggedInGuard';
+import { AdminGuard } from '../../middleware/AdminGuard';
+import { ActiveUserGuard } from '../../middleware/ActiveUserGuard';
 
 
 @Module({
@@ -16,7 +19,7 @@ import { AuthModule } from '../authentication/authentication.module';
     forwardRef(() => AuthModule),
   ],
   controllers: [UsersController, AdminController, ActivityLogsController],
-  providers: [UsersService],
+  providers: [UsersService, LoggedInGuard, AdminGuard, ActiveUserGuard],
   exports: [UsersService],
 })
 export class UsersModule {}

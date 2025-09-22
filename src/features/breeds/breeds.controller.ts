@@ -50,6 +50,12 @@ export class BreedsController {
     return this.breedsService.findActiveBreeds();
   }
 
+  @Get('homepage/featured')
+  @Serialize(BreedResponseDto)
+  findFeaturedBreeds() {
+    return this.breedsService.findFeaturedBreeds();
+  }
+
   @Get('categories')
   findCategories() {
     return this.breedsService.findCategories();
@@ -68,6 +74,14 @@ export class BreedsController {
     }
     return this.breedsService.searchBreeds(searchTerm);
   }
+
+  // Public endpoint for breed type images
+  @Get('type-images/homepage/featured')
+  findFeaturedBreedTypeImages() {
+    return this.breedsService.findActiveBreeds();
+
+  }
+
 
   @Get('category/:category')
   @Serialize(BreedResponseDto)

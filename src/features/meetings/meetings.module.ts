@@ -11,6 +11,7 @@ import { UserCalendarTokens } from './entities/user-calendar-tokens.entity';
 import { ListingsModule } from '../listings/listings.module';
 import { UsersModule } from '../accounts/users.module';
 import { AuthModule } from '../authentication/authentication.module';
+import { LoggedInGuard } from '../../middleware/LoggedInGuard';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { AuthModule } from '../authentication/authentication.module';
     AuthModule,
   ],
   controllers: [MeetingsController, OAuthCalendarController, CalendarWebhookController],
-  providers: [MeetingsService, OAuthCalendarService, UserCalendarTokensService],
+  providers: [MeetingsService, OAuthCalendarService, UserCalendarTokensService, LoggedInGuard],
   exports: [MeetingsService, OAuthCalendarService, UserCalendarTokensService],
 })
 export class MeetingsModule {}

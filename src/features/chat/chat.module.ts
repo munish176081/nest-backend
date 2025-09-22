@@ -12,6 +12,7 @@ import { UsersModule } from '../accounts/users.module';
 import { ListingsModule } from '../listings/listings.module';
 import { AuthModule } from '../authentication/authentication.module';
 import { User } from '../accounts/entities/account.entity';
+import { LoggedInGuard } from '../../middleware/LoggedInGuard';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { User } from '../accounts/entities/account.entity';
     AuthModule, // Add this to provide SessionService
   ],
   controllers: [ChatController],
-  providers: [ChatService, ChatGateway, ChatWebSocketService],
+  providers: [ChatService, ChatGateway, ChatWebSocketService, LoggedInGuard],
   exports: [ChatService, ChatGateway, ChatWebSocketService],
 })
 export class ChatModule {} 

@@ -7,6 +7,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Upload } from './entities/upload.entity';
 import { AuthModule } from '../authentication/authentication.module';
 import { UsersModule } from '../accounts/users.module';
+import { LoggedInGuard } from '../../middleware/LoggedInGuard';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { UsersModule } from '../accounts/users.module';
     UploadService,
     R2Service,
     UploadRepository,
+    LoggedInGuard,
   ],
   exports: [UploadService],
 })

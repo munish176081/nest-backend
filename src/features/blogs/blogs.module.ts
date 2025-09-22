@@ -7,6 +7,8 @@ import { BlogService } from './services/blog.service';
 import { BlogController } from './controllers/blog.controller';
 import { AuthModule } from '../authentication/authentication.module';
 import { UsersModule } from '../accounts/users.module';
+import { LoggedInGuard } from '../../middleware/LoggedInGuard';
+import { ActiveUserGuard } from '../../middleware/ActiveUserGuard';
 
 @Module({
   imports: [
@@ -14,7 +16,7 @@ import { UsersModule } from '../accounts/users.module';
     AuthModule,
     UsersModule,
   ],
-  providers: [BlogRepository, BlogService],
+  providers: [BlogRepository, BlogService, LoggedInGuard, ActiveUserGuard],
   controllers: [BlogController],
   exports: [BlogService, BlogRepository],
 })

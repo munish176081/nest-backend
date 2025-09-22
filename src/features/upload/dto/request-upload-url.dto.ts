@@ -2,6 +2,8 @@ import { IsString, IsNumber, IsOptional, IsEnum, Min, Max } from 'class-validato
 
 export enum FileType {
   IMAGE = 'image',
+  BREED_IMAGE = 'breed-image',
+  BREED_TYPE_IMAGE = 'breed-type-image',
   VIDEO = 'video',
   DOCUMENT = 'document',
 }

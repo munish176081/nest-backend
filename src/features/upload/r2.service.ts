@@ -155,6 +155,10 @@ export class R2Service implements IR2Service {
     switch (fileType.toLowerCase()) {
       case 'image':
         return 'images';
+      case 'breed-image':
+        return 'breeds';
+      case 'breed-type-image':
+        return 'breed-type';
       case 'video':
         return 'videos';
       case 'document':

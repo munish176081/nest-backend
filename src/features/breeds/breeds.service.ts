@@ -87,6 +87,14 @@ export class BreedsService {
     });
   }
 
+  async findFeaturedBreeds(): Promise<Breed[]> {
+    return this.breedRepository.find({
+      where: { isActive: true },
+      order: { sortOrder: 'ASC', name: 'ASC' },
+      take: 25 // Limit to 25 breeds as requested
+    });
+  }
+
   async findBreedsByCategory(category: string): Promise<Breed[]> {
     return this.breedRepository.find({
       where: { category, isActive: true },
@@ -448,5 +456,83 @@ export class BreedsService {
     
     breedData.isActive = true;
     return breedData;
+  }
+
+  async createCategory(category: string): Promise<{ success: boolean; message: string }> {
+    // Validate category name
+    const validationResult = this.validateCategoryName(category);
+    if (!validationResult.isValid) {
+      throw new Error(validationResult.message);
+    }
+
+    // Check if category already exists
+    const existingCategory = await this.breedRepository.findOne({
+      where: { category: category.toLowerCase() }
+    });
+
+    if (existingCategory) {
+      throw new Error(`Category '${category}' already exists`);
+    }
+
+    // Create a placeholder breed entry for this category
+    // This ensures the category appears in the categories list
+    const placeholderBreed = this.breedRepository.create({
+      name: `${category.charAt(0).toUpperCase() + category.slice(1)} Category`,
+      slug: `category-${category.toLowerCase()}`,
+      description: `Placeholder breed for ${category} category`,
+      category: category.toLowerCase(),
+      isActive: true,
+      sortOrder: 999 // High sort order to keep it at the end
+    });
+
+    await this.breedRepository.save(placeholderBreed);
+
+    return {
+      success: true,
+      message: `Category '${category}' created successfully`
+    };
+  }
+
+  private validateCategoryName(category: string): { isValid: boolean; message: string } {
+    if (!category || typeof category !== 'string') {
+      return { isValid: false, message: 'Category name is required' };
+    }
+
+    const trimmedCategory = category.trim();
+    
+    if (trimmedCategory.length < 3) {
+      return { isValid: false, message: 'Category name must be at least 3 characters long' };
+    }
+
+    if (trimmedCategory.length > 50) {
+      return { isValid: false, message: 'Category name must be less than 50 characters' };
+    }
+
+    // Check for valid format: lowercase, alphanumeric, hyphens, underscores only
+    const validFormat = /^[a-z0-9_-]+$/.test(trimmedCategory);
+    if (!validFormat) {
+      return { 
+        isValid: false, 
+        message: 'Category name must contain only lowercase letters, numbers, hyphens, and underscores' 
+      };
+    }
+
+    // Check for consecutive special characters
+    if (/[-_]{2,}/.test(trimmedCategory)) {
+      return { 
+        isValid: false, 
+        message: 'Category name cannot have consecutive hyphens or underscores' 
+      };
+    }
+
+    // Check for starting/ending with special characters
+    if (/^[-_]|[-_]$/.test(trimmedCategory)) {
+      return { 
+        isValid: false, 
+        message: 'Category name cannot start or end with hyphens or underscores' 
+      };
+    }
+
+    return { isValid: true, message: 'Valid category name' };
   }
 } 

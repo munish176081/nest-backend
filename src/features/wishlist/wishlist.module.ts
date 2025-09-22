@@ -6,6 +6,7 @@ import { WishlistController } from './wishlist.controller';
 import { ListingsModule } from '../listings/listings.module';
 import { AuthModule } from '../authentication/authentication.module';
 import { UsersModule } from '../accounts/users.module';
+import { LoggedInGuard } from '../../middleware/LoggedInGuard';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { UsersModule } from '../accounts/users.module';
     UsersModule,
   ],
   controllers: [WishlistController],
-  providers: [WishlistService],
+  providers: [WishlistService, LoggedInGuard],
   exports: [WishlistService],
 })
 export class WishlistModule {}

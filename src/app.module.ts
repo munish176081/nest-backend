@@ -9,6 +9,7 @@ import { User } from './features/accounts/entities/account.entity';
 import { Upload } from './features/upload/entities/upload.entity';
 import { Listing } from './features/listings/entities/listing.entity';
 import { Breed } from './features/breeds/entities/breed.entity';
+import { BreedTypeImage } from './features/breeds/entities/breed-type-image.entity';
 import { Conversation } from './features/chat/entities/conversation.entity';
 import { Message } from './features/chat/entities/message.entity';
 import { Participant } from './features/chat/entities/participant.entity';
@@ -47,7 +48,7 @@ import { BlogsModule } from './features/blogs/blogs.module';
           type: 'postgres',
           url: configService.get('dbUrl'),
           synchronize: true, // Re-enabled after fixing database
-          entities: [ExternalAuthAccount, User, Upload, Listing, Breed, Conversation, Message, Participant, Meeting, UserCalendarTokens, Wishlist, BlogPost, BlogCategory],
+          entities: [ExternalAuthAccount, User, Upload, Listing, Breed, BreedTypeImage, Conversation, Message, Participant, Meeting, UserCalendarTokens, Wishlist, BlogPost, BlogCategory],
           namingStrategy: new SnakeCaseNamingStrategy(),
           logging: false,
     
