@@ -76,6 +76,7 @@ export class ListingsService {
       seoData: createListingDto.seoData,
       motherInfo: createListingDto.motherInfo,
       fatherInfo: createListingDto.fatherInfo,
+      studInfo: createListingDto.studInfo,
     };
 
     const listing = await this.listingsRepository.create(listingData);
@@ -146,6 +147,7 @@ export class ListingsService {
       seoData: updateListingDto.seoData,
       motherInfo: updateListingDto.motherInfo,
       fatherInfo: updateListingDto.fatherInfo,
+      studInfo: updateListingDto.studInfo,
     };
 
     const updatedListing = await this.listingsRepository.update(listingId, updateData);
@@ -432,6 +434,7 @@ export class ListingsService {
       availability: listing.availability,
       motherInfo: listing.motherInfo,
       fatherInfo: listing.fatherInfo,
+      studInfo: listing.studInfo,
       user: transformedUser,
     };
   }

@@ -88,6 +88,9 @@ export class ListingResponseDto {
   fatherInfo: Record<string, any>;
 
   @Expose()
+  studInfo: Record<string, any>;
+
+  @Expose()
   createdAt: Date;
 
   @Expose()

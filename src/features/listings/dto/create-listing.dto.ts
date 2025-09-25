@@ -156,6 +156,11 @@ export class CreateListingDto {
   fatherInfo?: ParentInfoDto;
 
   @IsOptional()
+  @ValidateNested()
+  @Type(() => ParentInfoDto)
+  studInfo?: ParentInfoDto;
+
+  @IsOptional()
   @IsObject()
   metadata?: Record<string, any>;
 } 

@@ -54,14 +54,14 @@ import { BlogsModule } from './features/blogs/blogs.module';
     
         
           // ✅ Final working setup: one ssl object only
-          ssl: {
-            rejectUnauthorized: false,
-          },
-          extra: {
-            ssl: {
-              rejectUnauthorized: false,
-            },
-          },
+          // ssl: {
+          //   rejectUnauthorized: false,
+          // },
+          // extra: {
+          //   ssl: {
+          //     rejectUnauthorized: false,
+          //   },
+          // },
         };
       },
     }),

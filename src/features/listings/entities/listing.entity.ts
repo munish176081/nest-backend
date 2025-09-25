@@ -107,8 +107,10 @@ export class Listing {
     documents?: string[];
     motherImages?: string[];
     fatherImages?: string[];
+    studImages?: string[];
     motherVideos?: string[];
     fatherVideos?: string[];
+    studVideos?: string[];
     tags?: string[];
     featured?: boolean;
     premium?: boolean;
@@ -131,6 +133,17 @@ export class Listing {
   @Column({ type: 'jsonb', nullable: true })
   @Index('idx_listings_father_info', { synchronize: false })
   fatherInfo: {
+    name?: string;
+    breed?: string;
+    color?: string;
+    weight?: string;
+    temperament?: string;
+    healthInfo?: string;
+  };
+
+  @Column({ type: 'jsonb', nullable: true })
+  @Index('idx_listings_stud_info', { synchronize: false })
+  studInfo: {
     name?: string;
     breed?: string;
     color?: string;
