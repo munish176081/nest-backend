@@ -1,5 +1,5 @@
 import { Expose } from 'class-transformer';
-
+//user listings
 export class UserListings {
   @Expose()
   id: string;

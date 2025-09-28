@@ -285,6 +285,52 @@ export class UsersService {
     return this.userRepo.save(user);
   }
 
+  async updateUserProfile(userId: string, updateData: {
+    name?: string;
+    username?: string;
+    email?: string;
+    imageUrl?: string;
+  }) {
+    const user = await this.getUserById(userId);
+    
+    // Check if username is being changed and if it's already taken
+    if (updateData.username && updateData.username !== user.username) {
+      const existingUser = await this.userRepo.findOne({
+        where: { username: ILike(updateData.username) }
+      });
+      if (existingUser && existingUser.id !== userId) {
+        throw new BadRequestException('Username is already taken');
+      }
+    }
+
+    // Check if email is being changed and if it's already taken
+    if (updateData.email && updateData.email !== user.email) {
+      const existingUser = await this.userRepo.findOne({
+        where: { email: updateData.email }
+      });
+      if (existingUser && existingUser.id !== userId) {
+        throw new BadRequestException('Email is already taken');
+      }
+    }
+
+    // Update user fields
+    if (updateData.name !== undefined) user.name = updateData.name;
+    if (updateData.username !== undefined) user.username = updateData.username;
+    if (updateData.email !== undefined) user.email = updateData.email;
+    if (updateData.imageUrl !== undefined) user.imageUrl = updateData.imageUrl;
+
+    const updatedUser = await this.userRepo.save(user);
+
+    // Update session data after user profile changes
+    try {
+      await this.sessionService.updateUserSession(userId, updatedUser);
+    } catch (error) {
+      console.error('Error updating session after user profile changes:', error);
+    }
+
+    return updatedUser;
+  }
+
   async deleteUser(id: string) {
     const user = await this.getUserById(id);
     await this.userRepo.remove(user);

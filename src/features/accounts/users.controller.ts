@@ -21,6 +21,7 @@ import { CreateListingDto } from '../listings/dto/create-listing.dto';
 import { ListingResponseDto, ListingSummaryDto } from '../listings/dto/response-listing.dto';
 import { UpdateListingDto } from '../listings/dto/update-listing.dto';
 import { ListingAvailabilityEnum } from '../listings/entities/listing.entity';
+import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 
 @Controller('users')
 export class UsersController {
@@ -34,6 +35,16 @@ export class UsersController {
   @Get('me')
   async findCurrenUser(@Req() req: Request) {
     return req.user;
+  }
+
+  @UseGuards(LoggedInGuard)
+  @Serialize(UserDto)
+  @Put('me')
+  async updateUserProfile(
+    @Req() req: Request,
+    @Body() updateUserProfileDto: UpdateUserProfileDto,
+  ) {
+    return await this.usersService.updateUserProfile(req.user.id, updateUserProfileDto);
   }
 
   @UseGuards(LoggedInGuard)
