@@ -33,6 +33,10 @@ export class QueryListingDto {
   location?: string;
 
   @IsOptional()
+  @IsString()
+  gender?: 'stud' | 'bitch';
+
+  @IsOptional()
   @IsNumber()
   @Type(() => Number)
   minPrice?: number;

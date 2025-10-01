@@ -95,6 +95,12 @@ export class BreedsController {
     return this.breedsService.findBySlug(slug);
   }
 
+  @Get('featured')
+  @Serialize(BreedResponseDto)
+  getFeaturedBreeds() {
+    return this.breedsService.getFeaturedBreeds();
+  }
+
   @Post('import')
   @UseInterceptors(FileInterceptor('file'))
   async importBreeds(@UploadedFile() file: Express.Multer.File) {
@@ -126,5 +132,11 @@ export class BreedsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   hardRemove(@Param('id') id: string) {
     return this.breedsService.hardDelete(id);
+  }
+
+  @Patch(':id/toggle-featured')
+  // @UseGuards(LocalAuthGuard, ActiveUserGuard)
+  toggleFeaturedStatus(@Param('id') id: string) {
+    return this.breedsService.toggleFeaturedStatus(id);
   }
 } 

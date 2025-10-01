@@ -32,6 +32,9 @@ export class BreedResponseDto {
   sortOrder: number;
 
   @Expose()
+  isFeatured: boolean;
+
+  @Expose()
   imageUrl: string;
 
   @Expose()

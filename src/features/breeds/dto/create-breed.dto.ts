@@ -42,6 +42,10 @@ export class CreateBreedDto {
   sortOrder?: number;
 
   @IsOptional()
+  @IsBoolean()
+  isFeatured?: boolean;
+
+  @IsOptional()
   @IsString()
   @MaxLength(500)
   imageUrl?: string;

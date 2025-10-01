@@ -46,6 +46,9 @@ export class Breed {
   @Column({ type: 'int', default: 0 })
   sortOrder: number;
 
+  @Column({ type: 'boolean', default: false })
+  isFeatured: boolean;
+
   @Column({ type: 'varchar', length: 500, nullable: true })
   imageUrl: string; // URL to the breed image
 

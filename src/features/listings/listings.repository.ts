@@ -326,6 +326,11 @@ export class ListingsRepository {
       queryBuilder.andWhere('listing.location ILIKE :location', { location: `%${queryDto.location}%` });
     }
 
+    // Gender filter (for stud/bitch listings)
+    if (queryDto.gender) {
+      queryBuilder.andWhere('listing.fields->>\'gender\' = :gender', { gender: queryDto.gender });
+    }
+
     // Price range
     if (queryDto.minPrice !== undefined) {
       queryBuilder.andWhere('listing.price >= :minPrice', { minPrice: queryDto.minPrice });

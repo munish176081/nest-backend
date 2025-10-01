@@ -1,9 +1,11 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
+import { plainToClass } from 'class-transformer';
 import { CreateBreedDto } from './dto/create-breed.dto';
 import { UpdateBreedDto } from './dto/update-breed.dto';
 import { QueryBreedDto } from './dto/query-breed.dto';
+import { BreedResponseDto } from './dto/breed-response.dto';
 import { Breed } from './entities/breed.entity';
 
 @Injectable()
@@ -87,12 +89,19 @@ export class BreedsService {
     });
   }
 
-  async findFeaturedBreeds(): Promise<Breed[]> {
-    return this.breedRepository.find({
-      where: { isActive: true },
+  async findFeaturedBreeds(): Promise<BreedResponseDto[]> {
+    const breeds = await this.breedRepository.find({
+      where: { 
+        isActive: true,
+        isFeatured: true 
+      },
       order: { sortOrder: 'ASC', name: 'ASC' },
       take: 25 // Limit to 25 breeds as requested
     });
+
+    return breeds.map(breed => plainToClass(BreedResponseDto, breed, {
+      excludeExtraneousValues: true
+    }));
   }
 
   async findBreedsByCategory(category: string): Promise<Breed[]> {
@@ -534,5 +543,34 @@ export class BreedsService {
     }
 
     return { isValid: true, message: 'Valid category name' };
+  }
+
+  async getFeaturedBreeds(): Promise<BreedResponseDto[]> {
+    const breeds = await this.breedRepository.find({
+      where: { 
+        isFeatured: true,
+        isActive: true 
+      },
+      order: { sortOrder: 'ASC', name: 'ASC' }
+    });
+
+    return breeds.map(breed => plainToClass(BreedResponseDto, breed, {
+      excludeExtraneousValues: true
+    }));
+  }
+
+  async toggleFeaturedStatus(id: string): Promise<BreedResponseDto> {
+    const breed = await this.breedRepository.findOne({ where: { id } });
+    
+    if (!breed) {
+      throw new NotFoundException('Breed not found');
+    }
+
+    breed.isFeatured = !breed.isFeatured;
+    const updatedBreed = await this.breedRepository.save(breed);
+
+    return plainToClass(BreedResponseDto, updatedBreed, {
+      excludeExtraneousValues: true
+    });
   }
 } 
