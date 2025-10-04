@@ -266,6 +266,14 @@ export class UploadService {
         'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 
         'image/bmp', 'image/tiff', 'image/svg+xml'
       ],
+      [FileType.BREED_IMAGE]: [
+        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 
+        'image/bmp', 'image/tiff', 'image/svg+xml'
+      ],
+      [FileType.BREED_TYPE_IMAGE]: [
+        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 
+        'image/bmp', 'image/tiff', 'image/svg+xml'
+      ],
       [FileType.VIDEO]: [
         'video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/flv',
         'video/webm', 'video/mkv', 'video/3gp', 'video/ogg', 'video/m4v'
@@ -314,6 +322,8 @@ export class UploadService {
   private validateFileSize(fileSize: number, fileType: FileType): void {
     const maxSizes = {
       [FileType.IMAGE]: 15 * 1024 * 1024, // 15MB - for high-res images
+      [FileType.BREED_IMAGE]: 15 * 1024 * 1024, // 15MB - for breed images
+      [FileType.BREED_TYPE_IMAGE]: 15 * 1024 * 1024, // 15MB - for breed type images
       [FileType.VIDEO]: 500 * 1024 * 1024, // 500MB - for longer videos
       [FileType.DOCUMENT]: 25 * 1024 * 1024, // 25MB - for large documents
     };
