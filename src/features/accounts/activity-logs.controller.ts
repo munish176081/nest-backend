@@ -3,94 +3,59 @@ import {
   Get,
   Query,
   UseGuards,
+  Param,
 } from '@nestjs/common';
 import { LoggedInGuard } from '../../middleware/LoggedInGuard';
 import { ActiveUserGuard } from '../../middleware/ActiveUserGuard';
 import { AdminGuard } from '../../middleware/AdminGuard';
-
-interface ActivityLogsQuery {
-  page?: number;
-  limit?: number;
-  type?: string;
-  level?: string;
-  actorId?: string;
-  targetId?: string;
-  resourceType?: string;
-  startDate?: string;
-  endDate?: string;
-  search?: string;
-}
+import { ActivityLogsService, ActivityLogsQuery } from './activity-logs.service';
 
 @Controller('admin/activity-logs')
 @UseGuards(LoggedInGuard, ActiveUserGuard, AdminGuard)
 export class ActivityLogsController {
-  constructor() {}
+  constructor(private readonly activityLogsService: ActivityLogsService) {}
 
   @Get()
   async getActivityLogs(@Query() query: ActivityLogsQuery) {
-    // For now, return mock data until we implement actual activity logging
-    return {
-      logs: [],
-      total: 0,
-      page: parseInt(query.page?.toString() || '1'),
-      limit: parseInt(query.limit?.toString() || '20'),
-      totalPages: 0,
-    };
+    return this.activityLogsService.getActivityLogs(query);
   }
 
   @Get('recent')
   async getRecentActivities(@Query('limit') limit: string = '50') {
-    // For now, return mock data
-    return {
-      logs: [],
-      total: 0,
-      lastUpdated: new Date().toISOString(),
-    };
+    const limitNum = parseInt(limit);
+    return this.activityLogsService.getRecentActivities(limitNum);
   }
 
   @Get('stats')
   async getActivityStats() {
-    // For now, return mock data
-    return {
-      totalActivities: 0,
-      activitiesToday: 0,
-      activitiesThisWeek: 0,
-      activitiesThisMonth: 0,
-      topActivityTypes: [],
-      topActors: [],
-    };
+    return this.activityLogsService.getActivityStats();
   }
 
   @Get('user/:userId')
-  async getUserActivities(@Query() query: ActivityLogsQuery) {
-    // For now, return mock data
-    return {
-      logs: [],
-      total: 0,
-      page: parseInt(query.page?.toString() || '1'),
-      limit: parseInt(query.limit?.toString() || '20'),
-      totalPages: 0,
-    };
+  async getUserActivities(
+    @Param('userId') userId: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20'
+  ) {
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    return this.activityLogsService.getUserActivities(userId, pageNum, limitNum);
   }
 
   @Get('type/:type')
-  async getActivitiesByType(@Query() query: ActivityLogsQuery) {
-    // For now, return mock data
-    return {
-      logs: [],
-      total: 0,
-      page: parseInt(query.page?.toString() || '1'),
-      limit: parseInt(query.limit?.toString() || '20'),
-      totalPages: 0,
-    };
+  async getActivitiesByType(
+    @Param('type') type: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '20'
+  ) {
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    return this.activityLogsService.getActivitiesByType(type, pageNum, limitNum);
   }
 
   @Get('clean/old-logs')
-  async cleanOldLogs() {
-    // For now, return mock success
-    return {
-      message: 'Old logs cleaned successfully',
-      deletedCount: 0,
-    };
+  async cleanOldLogs(@Query('days') days: string = '90') {
+    const daysToKeep = parseInt(days);
+    return this.activityLogsService.cleanOldLogs(daysToKeep);
   }
 } 

@@ -133,7 +133,8 @@ export class AuthController {
   @Post('sign-up')
   async handleSignup(@Req() req: Request, @Body() signupBody: SignupDto) {
     const ip = parseIpFromReq(req);
-    const user = await this.authService.signUp(signupBody, ip);
+    const userAgent = req.get('User-Agent');
+    const user = await this.authService.signUp(signupBody, ip, userAgent);
 
     // Log the user in after signup
     return new Promise((resolve, reject) => {

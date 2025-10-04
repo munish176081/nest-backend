@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
 import { ListingsRepository } from './listings.repository';
 import { CreateListingDto, UpdateListingDto } from './dto';
 import { QueryListingDto, SearchListingDto } from './dto/query-listing.dto';
@@ -7,6 +7,7 @@ import { ListingResponseDto, ListingSummaryDto, PaginatedListingsResponseDto } f
 import { BreedsService } from '../breeds/breeds.service';
 import { calculateAge } from '../../helpers/date';
 import { UsersService } from '../accounts/users.service';
+import { ActivityLogsService } from '../accounts/activity-logs.service';
 
 @Injectable()
 export class ListingsService {
@@ -14,9 +15,11 @@ export class ListingsService {
     private readonly listingsRepository: ListingsRepository,
     private readonly breedsService: BreedsService,
     private readonly usersService: UsersService,
+    @Inject(forwardRef(() => ActivityLogsService))
+    private readonly activityLogsService: ActivityLogsService,
   ) { }
 
-  async createListing(createListingDto: CreateListingDto, userId: string): Promise<ListingResponseDto> {
+  async createListing(createListingDto: CreateListingDto, userId: string, ipAddress?: string, userAgent?: string): Promise<ListingResponseDto> {
     // Validate listing type and category
     this.validateListingTypeAndCategory(createListingDto.type, createListingDto.category);
 
@@ -80,6 +83,18 @@ export class ListingsService {
     };
 
     const listing = await this.listingsRepository.create(listingData);
+    
+    // Log listing creation activity
+    try {
+      const user = await this.usersService.getUserById(userId);
+      if (user) {
+        await this.activityLogsService.logListingCreation(listing, user, ipAddress, userAgent);
+      }
+    } catch (error) {
+      console.error('Failed to log listing creation activity:', error);
+      // Don't throw error as this is not critical for listing creation flow
+    }
+    
     return this.transformToListingResponse(listing);
   }
 

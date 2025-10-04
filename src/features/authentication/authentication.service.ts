@@ -26,6 +26,7 @@ import { VerifyEmailOtpDto } from './dto/verify-email-otp.dto';
 import { ResetPasswordOtpDto } from './dto/reset-password-otp.dto';
 import { UsersService } from '../accounts/users.service';
 import { User } from '../accounts/entities/account.entity';
+import { ActivityLogsService } from '../accounts/activity-logs.service';
 
 @Injectable()
 export class AuthService {
@@ -36,6 +37,8 @@ export class AuthService {
     private readonly externalAuthAccountRepo: Repository<ExternalAuthAccount>,
     @Inject(forwardRef(() => UsersService))
     private readonly usersService: UsersService,
+    @Inject(forwardRef(() => ActivityLogsService))
+    private readonly activityLogsService: ActivityLogsService,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
     private readonly otpService: OtpService,
@@ -157,7 +160,7 @@ export class AuthService {
     return user;
   }
 
-  async signUp(signupBody: SignupDto, ip?: string) {
+  async signUp(signupBody: SignupDto, ip?: string, userAgent?: string) {
     
     if (signupBody.confirmPassword !== signupBody.password) {
       throw new BadRequestException(
@@ -183,6 +186,14 @@ export class AuthService {
       hashedPassword,
       ip,
     });
+
+    // Log user signup activity
+    try {
+      await this.activityLogsService.logUserSignup(user, ip, userAgent);
+    } catch (error) {
+      console.error('Failed to log user signup activity:', error);
+      // Don't throw error as this is not critical for signup flow
+    }
 
     // Send verification based on configuration
     if (AuthConfig.USE_OTP_FOR_EMAIL_VERIFICATION) {

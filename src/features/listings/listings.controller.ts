@@ -32,7 +32,9 @@ export class ListingsController {
     @Req() req: Request,
     @Body() createListingDto: CreateListingDto,
   ): Promise<ListingResponseDto> {
-    return await this.listingsService.createListing(createListingDto, req.user.id);
+    const ip = req.ip || req.connection.remoteAddress;
+    const userAgent = req.get('User-Agent');
+    return await this.listingsService.createListing(createListingDto, req.user.id, ip, userAgent);
   }
 
   // Update listing
