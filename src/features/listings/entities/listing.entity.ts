@@ -18,6 +18,7 @@ import { Breed } from '../../breeds/entities/breed.entity';
 export enum ListingTypeEnum {
   SEMEN_LISTING = 'SEMEN_LISTING',
   PUPPY_LISTING = 'PUPPY_LISTING',
+  PUPPY_LITTER_LISTING = 'PUPPY_LITTER_LISTING',
   STUD_LISTING = 'STUD_LISTING',
   FUTURE_LISTING = 'FUTURE_LISTING',
   WANTED_LISTING = 'WANTED_LISTING',

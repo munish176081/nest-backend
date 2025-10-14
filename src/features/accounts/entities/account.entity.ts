@@ -1,4 +1,4 @@
-import { ExternalAuthAccount } from '../../authentication/entities/external-auth-accounts.entity';
+// import { ExternalAuthAccount } from '../../authentication/entities/external-auth-accounts.entity';
 import {
   Column,
   CreateDateColumn,
@@ -44,10 +44,10 @@ export class User {
   hashedPassword?: string;
 
   @OneToMany(
-    () => ExternalAuthAccount,
-    (externalAccount) => externalAccount.user,
+    'ExternalAuthAccount',
+    (externalAccount: any) => externalAccount.user,
   )
-  externalAccounts: ExternalAuthAccount[];
+  externalAccounts: any[];
 
   @OneToMany('Listing', (listing: any) => listing.user)
   listings: any[];

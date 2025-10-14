@@ -336,6 +336,7 @@ export class ListingsService {
     const typeCategoryMap: Record<ListingTypeEnum, string> = {
       'SEMEN_LISTING': 'breeding',
       'PUPPY_LISTING': 'puppy',
+      'PUPPY_LITTER_LISTING': 'puppy',
       'STUD_LISTING': 'breeding',
       'FUTURE_LISTING': 'puppy',
       'WANTED_LISTING': 'wanted',
@@ -370,6 +371,7 @@ export class ListingsService {
     const expirationDays: Record<ListingTypeEnum, number> = {
       'SEMEN_LISTING': 30,
       'PUPPY_LISTING': 90,
+      'PUPPY_LITTER_LISTING': 90,
       'STUD_LISTING': 30,
       'FUTURE_LISTING': 180,
       'WANTED_LISTING': 90,

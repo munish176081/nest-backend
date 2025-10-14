@@ -1,4 +1,4 @@
-import { User } from "../../accounts/entities/account.entity";
+// import { User } from "../../accounts/entities/account.entity";
 import {
   Column,
   CreateDateColumn,
@@ -26,9 +26,9 @@ export class ExternalAuthAccount {
   @Column({ type: 'jsonb' })
   raw: Record<string, unknown>;
 
-  @ManyToOne(() => User, (user: User) => user.externalAccounts)
+  @ManyToOne('User', (user: any) => user.externalAccounts)
   @JoinColumn({ name: 'userId' })
-  user?: User;
+  user?: any;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: string;
