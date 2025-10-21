@@ -49,6 +49,9 @@ export class ListingResponseDto {
   location: string;
 
   @Expose()
+  featuredImage: string;
+
+  @Expose()
   expiresAt: Date;
 
   @Expose()
