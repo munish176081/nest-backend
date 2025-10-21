@@ -148,7 +148,6 @@ export class ListingSummaryDto {
   location: string;
 
   @Expose()
-  @Transform(({ value }) => value?.images?.[0] || null)
   featuredImage: string;
 
   @Expose()

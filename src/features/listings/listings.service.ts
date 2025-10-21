@@ -274,7 +274,22 @@ export class ListingsService {
   }
 
   async getListings(queryDto: QueryListingDto): Promise<PaginatedListingsResponseDto> {
+    console.log('📋 getListings called with queryDto:', queryDto);
     const result = await this.listingsRepository.findActiveListings(queryDto);
+    console.log('📋 Found listings count:', result.listings.length);
+    
+    // Log each listing before transformation
+    result.listings.forEach((listing, index) => {
+      console.log(`📋 Listing ${index} (${listing.id}):`, {
+        type: listing.type,
+        hasFields: !!listing.fields,
+        hasIndividualPuppies: !!listing.fields?.individualPuppies,
+        individualPuppiesCount: listing.fields?.individualPuppies?.length,
+        hasMetadata: !!listing.metadata,
+        hasMetadataImages: !!listing.metadata?.images,
+        metadataImagesCount: listing.metadata?.images?.length
+      });
+    });
 
     return {
       data: result.listings.map(listing => this.transformToListingSummary(listing)),
@@ -404,6 +419,24 @@ export class ListingsService {
       calculatedAge = calculateAge(listing.fields.dateOfBirth);
     }
 
+    // Calculate featuredImage based on listing type
+    let featuredImage = null;
+    
+    if (listing.type === 'PUPPY_LITTER_LISTING' && listing.fields?.individualPuppies?.length > 0) {
+      console.log('🖼️ Processing puppy litter listing for featuredImage in transformToListingResponse');
+      const allPuppyImages: string[] = [];
+      listing.fields.individualPuppies.forEach((puppy: any) => {
+        if (puppy.puppyImages && Array.isArray(puppy.puppyImages)) {
+          allPuppyImages.push(...puppy.puppyImages);
+        }
+      });
+      featuredImage = allPuppyImages[0] || listing.metadata?.images?.[0] || null;
+      console.log('🖼️ Featured image set to:', featuredImage);
+    } else {
+      featuredImage = listing.metadata?.images?.[0] || null;
+      console.log('🖼️ Featured image set to metadata image:', featuredImage);
+    }
+
     const user = await this.usersService.getUserById(listing.userId);
     
     // Transform user object to only include necessary fields
@@ -436,6 +469,7 @@ export class ListingsService {
       breedId: listing.breedId,
       breedName: listing.breedRelation?.name || listing.breed,
       location: listing.location,
+      featuredImage: featuredImage,
       expiresAt: listing.expiresAt,
       startedOrRenewedAt: listing.startedOrRenewedAt,
       publishedAt: listing.publishedAt,
@@ -462,6 +496,24 @@ export class ListingsService {
     let calculatedAge = '';
     if (listing.fields?.dateOfBirth) {
       calculatedAge = calculateAge(listing.fields.dateOfBirth);
+    }
+    
+    // Calculate featuredImage based on listing type
+    let featuredImage = null;
+    
+    if (listing.type === 'PUPPY_LITTER_LISTING' && listing.fields?.individualPuppies?.length > 0) {
+      console.log('🖼️ Processing puppy litter listing for featuredImage');
+      const allPuppyImages: string[] = [];
+      listing.fields.individualPuppies.forEach((puppy: any) => {
+        if (puppy.puppyImages && Array.isArray(puppy.puppyImages)) {
+          allPuppyImages.push(...puppy.puppyImages);
+        }
+      });
+      featuredImage = allPuppyImages[0] || listing.metadata?.images?.[0] || null;
+      console.log('🖼️ Featured image set to:', featuredImage);
+    } else {
+      featuredImage = listing.metadata?.images?.[0] || null;
+      console.log('🖼️ Featured image set to metadata image:', featuredImage);
     }
     
     // Debug logging for user relation
@@ -495,7 +547,7 @@ export class ListingsService {
       breedId: listing.breedId,
       breedName: listing.breedRelation?.name || listing.breed,
       location: listing.location,
-      featuredImage: listing.metadata?.images?.[0] || null,
+      featuredImage: featuredImage,
       metadata: listing.metadata || {},
       viewCount: listing.viewCount,
       favoriteCount: listing.favoriteCount,
