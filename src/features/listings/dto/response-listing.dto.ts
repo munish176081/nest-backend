@@ -104,6 +104,7 @@ export class ListingResponseDto {
     id: string;
     name: string;
     email: string;
+    username: string;
     imageUrl?: string;
   };
 }
@@ -178,6 +179,9 @@ export class ListingSummaryDto {
   user?: {
     id: string;
     name: string;
+    email: string;
+    username: string;
+    imageUrl?: string;
   };
 }
 

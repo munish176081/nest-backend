@@ -411,6 +411,7 @@ export class ListingsService {
       id: user.id,
       name: user.name,
       email: user.email,
+      username: user.username,
       imageUrl: user.imageUrl,
     } : null;
     
@@ -477,6 +478,9 @@ export class ListingsService {
     const transformedUser = listing.user ? {
       id: listing.user.id,
       name: listing.user.name,
+      email: listing.user.email,
+      username: listing.user.username,
+      imageUrl: listing.user.imageUrl,
     } : null;
     
     return {

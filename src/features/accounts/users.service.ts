@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
   forwardRef,
 } from '@nestjs/common';
@@ -272,6 +273,14 @@ export class UsersService {
     return user;
   }
 
+  async getUserByUsername(username: string) {
+    const user = await this.userRepo.findOne({ where: { username } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return user;
+  }
+
   async updateUserStatus(id: string, status: 'active' | 'suspended' | 'not_verified') {
     const user = await this.getUserById(id);
     user.status = status;
@@ -286,10 +295,21 @@ export class UsersService {
   }
 
   async updateUserProfile(userId: string, updateData: {
-    name?: string;
+    name: string;
     username?: string;
-    email?: string;
+    email: string;
     imageUrl?: string;
+    phone: string;
+    bio?: string;
+    website?: string;
+    businessName: string;
+    businessABN: string;
+    description: string;
+    location: string;
+    idVerification?: {
+      governmentId: string[];
+      selfieWithId: string[];
+    };
   }) {
     const user = await this.getUserById(userId);
     
@@ -314,10 +334,18 @@ export class UsersService {
     }
 
     // Update user fields
-    if (updateData.name !== undefined) user.name = updateData.name;
+    user.name = updateData.name;
     if (updateData.username !== undefined) user.username = updateData.username;
-    if (updateData.email !== undefined) user.email = updateData.email;
+    user.email = updateData.email;
     if (updateData.imageUrl !== undefined) user.imageUrl = updateData.imageUrl;
+    user.phone = updateData.phone;
+    if (updateData.bio !== undefined) user.bio = updateData.bio;
+    if (updateData.website !== undefined) user.website = updateData.website;
+    user.businessName = updateData.businessName;
+    user.businessABN = updateData.businessABN;
+    user.description = updateData.description;
+    user.location = updateData.location;
+    if (updateData.idVerification !== undefined) user.idVerification = updateData.idVerification;
 
     const updatedUser = await this.userRepo.save(user);
 

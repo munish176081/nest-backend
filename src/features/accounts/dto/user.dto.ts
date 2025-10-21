@@ -18,6 +18,33 @@ export class UserDto {
   imageUrl: string;
 
   @Expose()
+  phone?: string;
+
+  @Expose()
+  bio?: string;
+
+  @Expose()
+  website?: string;
+
+  @Expose()
+  businessName?: string;
+
+  @Expose()
+  businessABN?: string;
+
+  @Expose()
+  description?: string;
+
+  @Expose()
+  location?: string;
+
+  @Expose()
+  idVerification?: {
+    governmentId: string[];
+    selfieWithId: string[];
+  };
+
+  @Expose()
   createdAt: string;
 
   @Expose()

@@ -37,6 +37,33 @@ export class User {
   @Column({ type: 'varchar', length: 512, nullable: true })
   imageUrl?: string;
 
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  phone?: string;
+
+  @Column({ type: 'text', nullable: true })
+  bio?: string;
+
+  @Column({ type: 'varchar', length: 512, nullable: true })
+  website?: string;
+
+  @Column({ type: 'varchar', length: 256, nullable: true })
+  businessName?: string;
+
+  @Column({ type: 'varchar', length: 11, nullable: true })
+  businessABN?: string;
+
+  @Column({ type: 'text', nullable: true })
+  description?: string;
+
+  @Column({ type: 'varchar', length: 256, nullable: true })
+  location?: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  idVerification?: {
+    governmentId: string[];
+    selfieWithId: string[];
+  };
+
   @Column({ type: 'varchar', length: 256, nullable: true })
   ip?: string;
 

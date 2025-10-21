@@ -9,6 +9,7 @@ import {
   Body,
   Delete,
   Put,
+  NotFoundException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { UserDto } from './dto/user.dto';
@@ -20,7 +21,7 @@ import { Serialize } from 'src/transformers/serialize.interceptor';
 import { CreateListingDto } from '../listings/dto/create-listing.dto';
 import { ListingResponseDto, ListingSummaryDto } from '../listings/dto/response-listing.dto';
 import { UpdateListingDto } from '../listings/dto/update-listing.dto';
-import { ListingAvailabilityEnum } from '../listings/entities/listing.entity';
+import { ListingAvailabilityEnum, ListingStatusEnum } from '../listings/entities/listing.entity';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
 
 @Controller('users')
@@ -34,7 +35,54 @@ export class UsersController {
   @Serialize(UserDto)
   @Get('me')
   async findCurrenUser(@Req() req: Request) {
-    return req.user;
+    // Fetch complete user data from database to include new profile fields
+    return await this.usersService.getUserById(req.user.id);
+  }
+
+  @Serialize(UserDto)
+  @Get('profile/:username')
+  async getUserProfile(@Param('username') username: string) {
+    return await this.usersService.getUserByUsername(username);
+  }
+
+  @Get(':username/listings')
+  async getPublicUserListings(@Param('username') username: string) {
+    const user = await this.usersService.getUserByUsername(username);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    
+    // Get all active listings for this user
+    const listings = await this.listingsService.getUserListings(user.id, {
+      status: ListingStatusEnum.ACTIVE,
+      includeExpired: false,
+      includeDrafts: false
+    });
+    
+    console.log('🔍 Debug - User ID:', user.id);
+    console.log('🔍 Debug - Total listings found:', listings.length);
+    console.log('🔍 Debug - Listing types:', listings.map(l => l.type));
+    
+    // Group listings by type
+    const groupedListings = {
+      puppies: listings.filter(listing => listing.type === 'PUPPY_LISTING'),
+      litters: listings.filter(listing => listing.type === 'PUPPY_LITTER_LISTING'),
+      stud: listings.filter(listing => listing.type === 'STUD_LISTING'),
+      semen: listings.filter(listing => listing.type === 'SEMEN_LISTING'),
+      wanted: listings.filter(listing => listing.type === 'WANTED_LISTING'),
+      services: listings.filter(listing => listing.type === 'OTHER_SERVICES')
+    };
+    
+    console.log('🔍 Debug - Grouped listings:', {
+      puppies: groupedListings.puppies.length,
+      litters: groupedListings.litters.length,
+      stud: groupedListings.stud.length,
+      semen: groupedListings.semen.length,
+      wanted: groupedListings.wanted.length,
+      services: groupedListings.services.length
+    });
+    
+    return groupedListings;
   }
 
   @UseGuards(LoggedInGuard)
