@@ -85,6 +85,10 @@ export class UsersController {
           const listLitterOption = listing.fields?.listLitterOption;
           return listLitterOption === 'same-details' || listLitterOption === 'add-individually';
         }
+        // Include FUTURE_LISTING (future litters)
+        if (listing.type === 'FUTURE_LISTING') {
+          return true;
+        }
         return false;
       }),
       stud: listings.filter(listing => listing.type === 'STUD_LISTING'),
