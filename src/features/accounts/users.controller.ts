@@ -62,11 +62,31 @@ export class UsersController {
     console.log('🔍 Debug - User ID:', user.id);
     console.log('🔍 Debug - Total listings found:', listings.length);
     console.log('🔍 Debug - Listing types:', listings.map(l => l.type));
+    console.log('🔍 Debug - PUPPY_LITTER_LISTING listLitterOptions:', 
+      listings
+        .filter(l => l.type === 'PUPPY_LITTER_LISTING')
+        .map(l => ({ id: l.id, listLitterOption: l.fields?.listLitterOption }))
+    );
     
     // Group listings by type
     const groupedListings = {
-      puppies: listings.filter(listing => listing.type === 'PUPPY_LISTING'),
-      litters: listings.filter(listing => listing.type === 'PUPPY_LITTER_LISTING'),
+      puppies: listings.filter(listing => {
+        // Include PUPPY_LISTING and PUPPY_LITTER_LISTING with single-puppy option
+        if (listing.type === 'PUPPY_LISTING') return true;
+        if (listing.type === 'PUPPY_LITTER_LISTING') {
+          const listLitterOption = listing.fields?.listLitterOption;
+          return listLitterOption === 'single-puppy';
+        }
+        return false;
+      }),
+      litters: listings.filter(listing => {
+        // Include PUPPY_LITTER_LISTING with litter options (same-details or add-individually)
+        if (listing.type === 'PUPPY_LITTER_LISTING') {
+          const listLitterOption = listing.fields?.listLitterOption;
+          return listLitterOption === 'same-details' || listLitterOption === 'add-individually';
+        }
+        return false;
+      }),
       stud: listings.filter(listing => listing.type === 'STUD_LISTING'),
       semen: listings.filter(listing => listing.type === 'SEMEN_LISTING'),
       wanted: listings.filter(listing => listing.type === 'WANTED_LISTING'),
