@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
+
 // CSV parsing using csv-parse
 let parse: (input: string, options: any) => any[];
 try {
@@ -180,9 +181,11 @@ class UserImport {
 }
 
 // Database configuration
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres:pups4sale@database-1.c1mks04su6ek.ap-southeast-2.rds.amazonaws.com:5432/pups4sale';
+
 const dataSource = new DataSource({
   type: 'postgres',
-  url: process.env.DATABASE_URL || 'postgresql://localhost:5432/pups4sale',
+  url: DATABASE_URL,
   entities: [UserImport],
   synchronize: false,
   logging: false, // Set to true for debugging
