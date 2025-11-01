@@ -13,7 +13,9 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/src/main",
     "lint": "eslint \"src/**/*.ts\" --fix",
-    "seed": "ts-node seed-standalone.ts"
+    "seed": "ts-node seed-standalone.ts",
+    "import:csv": "ts-node import-csv-users.ts",
+    "import:csv:dry": "DRY_RUN=true ts-node import-csv-users.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.540.0",
@@ -36,6 +38,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "connect-redis": "^7.1.1",
+    "csv-parse": "^5.6.0",
     "express": "^4.21.1",
     "express-session": "^1.18.0",
     "google-auth-library": "^10.3.0",

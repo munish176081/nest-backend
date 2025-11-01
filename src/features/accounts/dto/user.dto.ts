@@ -44,6 +44,53 @@ export class UserDto {
     selfieWithId: string[];
   };
 
+  // CSV Import fields
+  @Expose()
+  email2?: string;
+
+  @Expose()
+  phone2?: string;
+
+  @Expose()
+  fax?: string;
+
+  @Expose()
+  address?: string;
+
+  @Expose()
+  address2?: string;
+
+  @Expose()
+  zip?: string;
+
+  @Expose()
+  city?: string;
+
+  @Expose()
+  state?: string;
+
+  @Expose()
+  country?: string;
+
+  @Expose()
+  firstName?: string;
+
+  @Expose()
+  lastName?: string;
+
+  // CSV Import tracking flags
+  @Expose()
+  isImportedFromCsv?: boolean;
+
+  @Expose()
+  isProfileComplete?: boolean;
+
+  @Expose()
+  missingRequiredFields?: string[];
+
+  @Expose()
+  csvOptionalFields?: Record<string, any>;
+
   @Expose()
   createdAt: string;
 

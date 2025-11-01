@@ -64,6 +64,53 @@ export class User {
     selfieWithId: string[];
   };
 
+  // CSV Import fields
+  @Column({ type: 'varchar', length: 256, nullable: true })
+  email2?: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  phone2?: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  fax?: string;
+
+  @Column({ type: 'varchar', length: 512, nullable: true })
+  address?: string;
+
+  @Column({ type: 'varchar', length: 512, nullable: true })
+  address2?: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  zip?: string;
+
+  @Column({ type: 'varchar', length: 256, nullable: true })
+  city?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  state?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  country?: string;
+
+  @Column({ type: 'varchar', length: 256, nullable: true })
+  firstName?: string;
+
+  @Column({ type: 'varchar', length: 256, nullable: true })
+  lastName?: string;
+
+  // CSV Import tracking flags
+  @Column({ type: 'boolean', default: false })
+  isImportedFromCsv: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  isProfileComplete: boolean;
+
+  @Column({ type: 'jsonb', nullable: true })
+  missingRequiredFields?: string[];
+
+  @Column({ type: 'jsonb', nullable: true })
+  csvOptionalFields?: Record<string, any>;
+
   @Column({ type: 'varchar', length: 256, nullable: true })
   ip?: string;
 
