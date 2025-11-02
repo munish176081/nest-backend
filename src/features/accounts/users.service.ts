@@ -208,31 +208,39 @@ export class UsersService {
     role?: 'user' | 'admin' | 'super_admin';
   }) {
     console.log('getUsersForAdmin called with:', { page, limit, search, role });
-    role === undefined && (role = 'user');
     const skip = (page - 1) * limit;
-    const whereConditions: any[] = [];
 
-    if (search) {
-      whereConditions.push(
-        { name: ILike(`%${search}%`) },
-        { email: ILike(`%${search}%`) },
-        { username: ILike(`%${search}%`) }
+    // Use query builder for complex conditions
+    const queryBuilder = this.userRepo.createQueryBuilder('user');
+
+    // Add search conditions (OR: name OR email OR username)
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim()}%`;
+      queryBuilder.andWhere(
+        '(user.name ILIKE :search OR user.email ILIKE :search OR user.username ILIKE :search)',
+        { search: searchTerm }
       );
     }
 
+    // Add role condition
     if (role) {
-      whereConditions.push({ role });
+      queryBuilder.andWhere('user.role = :role', { role });
     }
 
-    console.log('Where conditions:', whereConditions);
+    // Order by creation date
+    queryBuilder.orderBy('user.createdAt', 'DESC');
+
+    // Count total before pagination
+    const total = await queryBuilder.getCount();
+
+    // Apply pagination
+    queryBuilder.skip(skip).take(limit);
+
+    console.log('Query SQL:', queryBuilder.getSql());
+    console.log('Query parameters:', queryBuilder.getParameters());
 
     try {
-      const [users, total] = await this.userRepo.findAndCount({
-        where: whereConditions.length > 0 ? whereConditions : undefined,
-        skip,
-        take: limit,
-        order: { createdAt: 'DESC' },
-      });
+      const users = await queryBuilder.getMany();
 
       console.log('Database query result:', { usersCount: users.length, total });
 
