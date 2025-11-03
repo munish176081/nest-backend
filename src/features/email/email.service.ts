@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { MailDataRequired } from '@sendgrid/mail';
-import { SendGridClient } from './sendgrid-client';
+import { SendGridClient, EmailSendResult } from './sendgrid-client';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
+
   constructor(
     private readonly sendGridClient: SendGridClient,
     private readonly configService: ConfigService,
@@ -13,14 +15,14 @@ export class EmailService {
   async sendTestEmail(
     recipient: string,
     body = 'This is a test mail',
-  ): Promise<void> {
+  ): Promise<EmailSendResult> {
     const mail: MailDataRequired = {
       to: recipient,
       from: this.configService.get('sendgrid.email'),
       subject: 'Test email',
       content: [{ type: 'text/html', value: body }],
     };
-    await this.sendGridClient.send(mail);
+    return await this.sendGridClient.send(mail);
   }
 
   async sendEmailWithTemplate<T>({
@@ -31,13 +33,13 @@ export class EmailService {
     recipient: string;
     templateId: string;
     dynamicTemplateData: T;
-  }): Promise<void> {
+  }): Promise<EmailSendResult> {
     const mail: MailDataRequired = {
       to: recipient,
       from: this.configService.get('email.sendgrid.email'),
       templateId,
       dynamicTemplateData,
     };
-    await this.sendGridClient.send(mail);
+    return await this.sendGridClient.send(mail);
   }
 }

@@ -11,49 +11,61 @@ export class ContactService {
   constructor(private readonly emailService: EmailService, private readonly configService: ConfigService) {}
 
   async submitContactForm(contactData: ContactDto): Promise<{ message: string; success: boolean }> {
-    try {
-      // Send notification email to admin using SendGrid template
-      await this.emailService.sendEmailWithTemplate({
-        recipient: this.configService.get('contact.supportEmail'),
-        templateId: sendGridEmailTemplates.contactForm, // Your SendGrid template ID for admin notifications
-        dynamicTemplateData: {
-          logoUrl: images.logo,
-          firstName: contactData.firstName,
-          lastName: contactData.lastName,
-          email: contactData.email,
-          phone: contactData.phone,
-          subject: contactData.subject || 'General Inquiry',
-          message: contactData.message,
-          submissionDate: new Date().toLocaleDateString(),
-        },
-      });
+    // Send notification email to admin using SendGrid template
+    const adminEmailResult = await this.emailService.sendEmailWithTemplate({
+      recipient: this.configService.get('contact.supportEmail'),
+      templateId: sendGridEmailTemplates.contactForm, // Your SendGrid template ID for admin notifications
+      dynamicTemplateData: {
+        logoUrl: images.logo,
+        firstName: contactData.firstName,
+        lastName: contactData.lastName,
+        email: contactData.email,
+        phone: contactData.phone,
+        subject: contactData.subject || 'General Inquiry',
+        message: contactData.message,
+        submissionDate: new Date().toLocaleDateString(),
+      },
+    });
 
-      // Send acknowledgment email to user using SendGrid template
-      await this.emailService.sendEmailWithTemplate({
-        recipient: contactData.email,
-        templateId: sendGridEmailTemplates.acknowledgment, // Your SendGrid template ID for user acknowledgments
-        dynamicTemplateData: {
-          logoUrl: images.logo,
-          firstName: contactData.firstName,
-          lastName: contactData.lastName,
-          email: contactData.email,
-          phone: contactData.phone,
-          subject: contactData.subject || 'General Inquiry',
-          message: contactData.message,
-          submissionDate: new Date().toLocaleDateString(),
-        },
-      });
+    // Send acknowledgment email to user using SendGrid template
+    const userEmailResult = await this.emailService.sendEmailWithTemplate({
+      recipient: contactData.email,
+      templateId: sendGridEmailTemplates.acknowledgment, // Your SendGrid template ID for user acknowledgments
+      dynamicTemplateData: {
+        logoUrl: images.logo,
+        firstName: contactData.firstName,
+        lastName: contactData.lastName,
+        email: contactData.email,
+        phone: contactData.phone,
+        subject: contactData.subject || 'General Inquiry',
+        message: contactData.message,
+        submissionDate: new Date().toLocaleDateString(),
+      },
+    });
 
-      this.logger.log(`Contact form submitted by ${contactData.email}`);
+    // Log email results
+    if (!adminEmailResult.success) {
+      this.logger.warn(`Failed to send admin notification email: ${adminEmailResult.error}`);
+    }
+    if (!userEmailResult.success) {
+      this.logger.warn(`Failed to send acknowledgment email to ${contactData.email}: ${userEmailResult.error}`);
+    }
 
+    // Always return success if at least one email was sent (or even if both failed, form was submitted)
+    // In production, you might want to store the submission in a database as a backup
+    this.logger.log(`Contact form submitted by ${contactData.email}`);
+
+    // If both emails failed, inform user but still return success (form was received)
+    if (!adminEmailResult.success && !userEmailResult.success) {
       return {
-        message: 'Your Enquiry has been submitted successfully!',
+        message: 'Your enquiry has been received, but we encountered an issue sending confirmation emails. We will contact you shortly.',
         success: true,
       };
-    } catch (error) {
-      this.logger.error('Failed to submit contact form', error);
-      console.log(error);
-      throw new Error('Failed to send message. Please try again later.');
     }
+
+    return {
+      message: 'Your Enquiry has been submitted successfully!',
+      success: true,
+    };
   }
 }

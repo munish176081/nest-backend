@@ -181,14 +181,17 @@ class UserImport {
 }
 
 // Database configuration
-const DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres:pups4sale@database-1.c1mks04su6ek.ap-southeast-2.rds.amazonaws.com:5432/pups4sale';
-
+const DATABASE_URL = "postgres://postgres:root@localhost:5432/pups4sale"
+console.log('DATABASE_URL', DATABASE_URL);
 const dataSource = new DataSource({
   type: 'postgres',
   url: DATABASE_URL,
   entities: [UserImport],
   synchronize: false,
   logging: false, // Set to true for debugging
+  ssl: DATABASE_URL.includes('amazonaws.com') || DATABASE_URL.includes('rds.amazonaws.com') ? {
+    rejectUnauthorized: false, // Required for RDS
+  } : false,
 });
 
 // Configuration
@@ -196,6 +199,7 @@ const BATCH_SIZE = 100; // Process users in batches for better performance
 const REQUIRED_FIELDS = ['email', 'username']; // Minimum required fields
 const CSV_DIRECTORY = process.env.CSV_DIR || path.join(__dirname, 'csv-imports');
 const DRY_RUN = process.env.DRY_RUN === 'true'; // Set to true to test without inserting
+const DEBUG_SKIPPED = process.env.DEBUG_SKIPPED === 'true'; // Log skipped emails for debugging
 
 // Utility functions
 function normalizeEmail(email: string): string | null {
@@ -424,12 +428,18 @@ async function importUsersFromCsv(filePath: string, userRepository: any, existin
 
         if (!userData) {
           skipped++;
+          if (DEBUG_SKIPPED && skipped <= 10) {
+            console.log(`   ⏭️  Skipping row ${processed}: missing or invalid email`);
+          }
           continue;
         }
 
         // Check for duplicate email
         if (existingEmails.has(userData.email!) || newEmails.has(userData.email!)) {
           skipped++;
+          if (DEBUG_SKIPPED && skipped <= 10) {
+            console.log(`   ⏭️  Skipping duplicate email: ${userData.email}`);
+          }
           continue;
         }
 
@@ -549,6 +559,7 @@ async function importAllCsvFiles() {
     const existingUsers = await userRepository.find({
       select: ['email', 'username'],
     });
+    console.log('existingUsers', existingUsers.length);
     
     const existingEmails = new Set(existingUsers.map(u => u.email.toLowerCase()));
     const existingUsernames = new Set(existingUsers.map(u => u.username.toLowerCase()));
@@ -601,6 +612,13 @@ async function importAllCsvFiles() {
     console.log(`⏭️  Skipped (duplicates/invalid): ${stats.totalSkipped}`);
     console.log(`❌ Errors: ${stats.totalErrors}`);
     console.log('='.repeat(60));
+    
+    if (stats.totalSkipped > 0 && stats.totalImported === 0) {
+      console.log(`\n💡 All records were skipped because their emails already exist in the database.`);
+      console.log(`   Database currently has ${existingUsers.length} users.`);
+      console.log(`   To see which emails are being skipped, run with: DEBUG_SKIPPED=true npm run import:csv`);
+      console.log(`   To force import/update, you would need to modify the script to use upsert instead of insert.`);
+    }
 
     if (stats.totalImported > 0) {
       console.log(`\n✅ Successfully imported ${stats.totalImported} users from CSV!`);

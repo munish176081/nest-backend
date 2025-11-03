@@ -132,19 +132,31 @@ export class AuthController {
   @Serialize(UserDto)
   @Post('sign-up')
   async handleSignup(@Req() req: Request, @Body() signupBody: SignupDto) {
-    const ip = parseIpFromReq(req);
-    const userAgent = req.get('User-Agent');
-    const user = await this.authService.signUp(signupBody, ip, userAgent);
+    try {
+      const ip = parseIpFromReq(req);
+      const userAgent = req.get('User-Agent');
+      const user = await this.authService.signUp(signupBody, ip, userAgent);
 
-    // Log the user in after signup
-    return new Promise((resolve, reject) => {
-      req.login(user, (err) => {
-        if (err) {
-          return reject(new InternalServerErrorException('Login after signup failed'));
-        }
-        resolve(user);
+      // Log the user in after signup
+      return new Promise((resolve, reject) => {
+        req.login(user, (err) => {
+          if (err) {
+            return reject(new BadRequestException('Signup successful but login failed. Please try logging in manually.'));
+          }
+          resolve(user);
+        });
       });
-    });
+    } catch (error) {
+      // Re-throw BadRequestException as-is (user-friendly errors)
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      // For other errors, wrap in BadRequestException with user-friendly message
+      throw new BadRequestException(
+        error?.message || 'An error occurred during signup. Please try again or contact support if the problem persists.'
+      );
+    }
   }
 
   @UseGuards(LoggedInGuard)
