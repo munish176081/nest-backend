@@ -15,6 +15,7 @@ export class BreedsRepository {
     const { search, category, size, isActive, page, limit, sortBy, sortOrder } = query;
     
     const queryBuilder = this.breedRepository.createQueryBuilder('breed');
+    queryBuilder.andWhere('breed.deletedAt IS NULL');
 
     // Apply filters
     if (search) {
@@ -68,14 +69,14 @@ export class BreedsRepository {
 
   async findActiveBreeds(): Promise<Breed[]> {
     return this.breedRepository.find({
-      where: { isActive: true },
+      where: { isActive: true, deletedAt: null } as any,
       order: { sortOrder: 'ASC', name: 'ASC' },
     });
   }
 
   async findBreedsByCategory(category: string): Promise<Breed[]> {
     return this.breedRepository.find({
-      where: { category, isActive: true },
+      where: { category, isActive: true, deletedAt: null } as any,
       order: { sortOrder: 'ASC', name: 'ASC' },
     });
   }
@@ -85,7 +86,7 @@ export class BreedsRepository {
       .createQueryBuilder('breed')
       .select('DISTINCT breed.category', 'category')
       .where('breed.category IS NOT NULL')
-      .andWhere('breed.isActive = :isActive', { isActive: true })
+      .andWhere('breed.deletedAt IS NULL')
       .orderBy('breed.category', 'ASC')
       .getRawMany();
 
@@ -97,7 +98,7 @@ export class BreedsRepository {
       .createQueryBuilder('breed')
       .select('DISTINCT breed.size', 'size')
       .where('breed.size IS NOT NULL')
-      .andWhere('breed.isActive = :isActive', { isActive: true })
+      .andWhere('breed.deletedAt IS NULL')
       .orderBy('breed.size', 'ASC')
       .getRawMany();
 
@@ -119,6 +120,6 @@ export class BreedsRepository {
   }
 
   async softDelete(id: string): Promise<void> {
-    await this.breedRepository.update(id, { isActive: false });
+    await this.breedRepository.update(id, { deletedAt: new Date() } as any);
   }
 } 

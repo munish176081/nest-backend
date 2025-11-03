@@ -22,11 +22,12 @@ export class BreedsService {
     
     const queryBuilder = this.breedRepository.createQueryBuilder('breed');
 
-    // Default to active breeds if isActive is not specified
+    // Always ignore soft-deleted rows
+    queryBuilder.andWhere('breed.deletedAt IS NULL');
+
+    // Optional visibility filter
     if (isActive !== undefined) {
       queryBuilder.andWhere('breed.isActive = :isActive', { isActive });
-    } else {
-      queryBuilder.andWhere('breed.isActive = :isActive', { isActive: true });
     }
 
     // Apply filters
@@ -116,7 +117,7 @@ export class BreedsService {
       .createQueryBuilder('breed')
       .select('DISTINCT breed.category', 'category')
       .where('breed.category IS NOT NULL')
-      .andWhere('breed.isActive = :isActive', { isActive: true })
+      .andWhere('breed.deletedAt IS NULL')
       .orderBy('breed.category', 'ASC')
       .getRawMany();
 
@@ -128,7 +129,7 @@ export class BreedsService {
       .createQueryBuilder('breed')
       .select('DISTINCT breed.size', 'size')
       .where('breed.size IS NOT NULL')
-      .andWhere('breed.isActive = :isActive', { isActive: true })
+      .andWhere('breed.deletedAt IS NULL')
       .orderBy('breed.size', 'ASC')
       .getRawMany();
 
@@ -136,14 +137,14 @@ export class BreedsService {
   }
 
   async create(createBreedDto: CreateBreedDto): Promise<Breed> {
-    // Check if breed with same name already exists
-    const existingBreedByName = await this.breedRepository.findOne({ where: { name: createBreedDto.name } });
+    // Check if breed with same name already exists (not soft-deleted)
+    const existingBreedByName = await this.breedRepository.findOne({ where: { name: createBreedDto.name, deletedAt: null } as any });
     if (existingBreedByName) {
       throw new ConflictException(`Breed with name '${createBreedDto.name}' already exists`);
     }
 
-    // Check if breed with same slug already exists
-    const existingBreedBySlug = await this.breedRepository.findOne({ where: { slug: createBreedDto.slug } });
+    // Check if breed with same slug already exists (not soft-deleted)
+    const existingBreedBySlug = await this.breedRepository.findOne({ where: { slug: createBreedDto.slug, deletedAt: null } as any });
     if (existingBreedBySlug) {
       throw new ConflictException(`Breed with slug '${createBreedDto.slug}' already exists`);
     }
@@ -164,17 +165,17 @@ export class BreedsService {
       throw new NotFoundException(`Breed with ID ${id} not found`);
     }
 
-    // If name is being updated, check for conflicts
+    // If name is being updated, check for conflicts (ignore soft-deleted rows)
     if (updateBreedDto.name && updateBreedDto.name !== existingBreed.name) {
-      const breedWithSameName = await this.breedRepository.findOne({ where: { name: updateBreedDto.name } });
+      const breedWithSameName = await this.breedRepository.findOne({ where: { name: updateBreedDto.name, deletedAt: null } as any });
       if (breedWithSameName) {
         throw new ConflictException(`Breed with name '${updateBreedDto.name}' already exists`);
       }
     }
 
-    // If slug is being updated, check for conflicts
+    // If slug is being updated, check for conflicts (ignore soft-deleted rows)
     if (updateBreedDto.slug && updateBreedDto.slug !== existingBreed.slug) {
-      const breedWithSameSlug = await this.breedRepository.findOne({ where: { slug: updateBreedDto.slug } });
+      const breedWithSameSlug = await this.breedRepository.findOne({ where: { slug: updateBreedDto.slug, deletedAt: null } as any });
       if (breedWithSameSlug) {
         throw new ConflictException(`Breed with slug '${updateBreedDto.slug}' already exists`);
       }
@@ -202,8 +203,8 @@ export class BreedsService {
     }
 
     // TODO: Check if breed is being used in any listings before deletion
-    // For now, we'll use soft delete
-    await this.breedRepository.update(id, { isActive: false });
+    // Soft delete: set deletedAt (do not rely on isActive for deletion state)
+    await this.breedRepository.update(id, { deletedAt: new Date() } as any);
   }
 
   async hardDelete(id: string): Promise<void> {
@@ -219,9 +220,9 @@ export class BreedsService {
   async searchBreeds(searchTerm: string): Promise<Breed[]> {
     return this.breedRepository.find({
       where: [
-        { name: ILike(`%${searchTerm}%`), isActive: true },
-        { description: ILike(`%${searchTerm}%`), isActive: true },
-        { temperament: ILike(`%${searchTerm}%`), isActive: true },
+        { name: ILike(`%${searchTerm}%`), deletedAt: null } as any,
+        { description: ILike(`%${searchTerm}%`), deletedAt: null } as any,
+        { temperament: ILike(`%${searchTerm}%`), deletedAt: null } as any,
       ],
       order: { sortOrder: 'ASC', name: 'ASC' },
       take: 20,
@@ -322,11 +323,11 @@ export class BreedsService {
             continue;
           }
 
-          // Check if breed already exists
+          // Check if breed already exists (ignore soft-deleted)
           const existingBreed = await this.breedRepository.findOne({
             where: [
-              { name: breedData.name },
-              { slug: breedData.slug }
+              { name: breedData.name, deletedAt: null } as any,
+              { slug: breedData.slug, deletedAt: null } as any
             ]
           });
 

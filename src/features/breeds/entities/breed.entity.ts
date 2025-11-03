@@ -10,8 +10,9 @@ import {
 import { Listing } from '../../listings/entities/listing.entity';
 
 @Entity({ name: 'breeds' })
-@Index(['name'])
-@Index(['slug'])
+// Partial unique indexes to allow duplicates only when previous row is soft-deleted
+@Index('UQ_breeds_name_not_deleted', ['name'], { unique: true, where: '"deleted_at" IS NULL' })
+@Index('UQ_breeds_slug_not_deleted', ['slug'], { unique: true, where: '"deleted_at" IS NULL' })
 @Index(['category'])
 @Index(['isActive'])
 @Index(['sortOrder'])
@@ -19,10 +20,10 @@ export class Breed {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 255, unique: true })
+  @Column({ type: 'varchar', length: 255 })
   name: string;
 
-  @Column({ type: 'varchar', length: 255, unique: true })
+  @Column({ type: 'varchar', length: 255 })
   slug: string;
 
   @Column({ type: 'text', nullable: true })
@@ -70,6 +71,9 @@ export class Breed {
 
   @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
+
+  @Column({ type: 'timestamptz', nullable: true, name: 'deleted_at' })
+  deletedAt: Date | null;
 
   // Relationships
   @OneToMany(() => Listing, (listing) => listing.breed)
