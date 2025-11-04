@@ -8,8 +8,9 @@ enum Environment {
 }
 
 enum EmailServiceType {
-  SendGrid = 'sendgrid',
+  Postmark = 'postmark',
   SMTP = 'smtp',
+  Gmail = 'gmail',
 }
 
 export const configValidationSchema = Joi.object({
@@ -31,14 +32,14 @@ export const configValidationSchema = Joi.object({
   // Email Configuration
   EMAIL_SERVICE_TYPE: Joi.string().valid(...Object.values(EmailServiceType)).required(),
   
-  // SendGrid Configuration
-  SENDGRID_API_KEY: Joi.string().when('EMAIL_SERVICE_TYPE', {
-    is: EmailServiceType.SendGrid,
+  // Postmark Configuration
+  POSTMARK_API_KEY: Joi.string().when('EMAIL_SERVICE_TYPE', {
+    is: EmailServiceType.Postmark,
     then: Joi.required(),
     otherwise: Joi.optional(),
   }),
-  SENDGRID_EMAIL: Joi.string().when('EMAIL_SERVICE_TYPE', {
-    is: EmailServiceType.SendGrid,
+  POSTMARK_EMAIL: Joi.string().when('EMAIL_SERVICE_TYPE', {
+    is: EmailServiceType.Postmark,
     then: Joi.required(),
     otherwise: Joi.optional(),
   }),
@@ -71,6 +72,23 @@ export const configValidationSchema = Joi.object({
   }),
   SMTP_SECURE: Joi.boolean().default(true),
 
+  // Gmail API Configuration (using EMAIL_GMAIL_ prefix to avoid conflicts with GOOGLE_CLIENT_ID/SECRET)
+  EMAIL_GMAIL_CLIENT_ID: Joi.string().when('EMAIL_SERVICE_TYPE', {
+    is: EmailServiceType.Gmail,
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+  EMAIL_GMAIL_CLIENT_SECRET: Joi.string().when('EMAIL_SERVICE_TYPE', {
+    is: EmailServiceType.Gmail,
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+  EMAIL_GMAIL_REDIRECT_URI: Joi.string().optional(),
+  // Refresh token is optional initially - user needs to obtain it via OAuth flow
+  EMAIL_GMAIL_REFRESH_TOKEN: Joi.string().optional(),
+  EMAIL_GMAIL_ACCESS_TOKEN: Joi.string().optional(),
+  EMAIL_GMAIL_EXPIRY_DATE: Joi.number().optional(),
+
   SESSION_SECRET: Joi.string().required(),
   COOKIE_DOMAIN: Joi.string().optional(),
 
@@ -102,11 +120,19 @@ export const configConfiguration = () => {
       clientId: process.env.FACEBOOK_CLIENT_ID,
       clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
     },
+    gmail: {
+      clientId: process.env.EMAIL_GMAIL_CLIENT_ID,
+      clientSecret: process.env.EMAIL_GMAIL_CLIENT_SECRET,
+      redirectUri: process.env.EMAIL_GMAIL_REDIRECT_URI,
+      accessToken: process.env.EMAIL_GMAIL_ACCESS_TOKEN,
+      refreshToken: process.env.EMAIL_GMAIL_REFRESH_TOKEN,
+      expiryDate: process.env.EMAIL_GMAIL_EXPIRY_DATE ? parseInt(process.env.EMAIL_GMAIL_EXPIRY_DATE, 10) : undefined,
+    },
     email: {
       serviceType: process.env.EMAIL_SERVICE_TYPE,
-      sendgrid: {
-        apiKey: process.env.SENDGRID_API_KEY,
-        email: process.env.SENDGRID_EMAIL,
+      postmark: {
+        apiKey: process.env.POSTMARK_API_KEY,
+        email: process.env.POSTMARK_EMAIL,
       },
       smtp: {
         host: process.env.SMTP_HOST,

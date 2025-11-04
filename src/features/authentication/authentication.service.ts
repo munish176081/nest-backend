@@ -519,7 +519,7 @@ export class AuthService {
     await this.otpService.setOtpCooldown(timeKey);
 
     const emailResult = await this.emailService.sendEmailWithTemplate({
-      templateId: sendGridEmailTemplates.emailVerificationWithOtp,
+      templateAlias: sendGridEmailTemplates.emailVerificationWithOtp,
       recipient: user.email,
       dynamicTemplateData: {
         username: user.name,
@@ -558,7 +558,7 @@ export class AuthService {
     await this.otpService.setOtpCooldown(timeKey);
 
     const emailResult = await this.emailService.sendEmailWithTemplate({
-      templateId: sendGridEmailTemplates.resetPasswordWithOtp,
+      templateAlias: sendGridEmailTemplates.resetPasswordWithOtp,
       recipient: user.email,
       dynamicTemplateData: {
         otp: otp,
@@ -599,7 +599,7 @@ export class AuthService {
     ]);
 
     const emailResult = await this.emailService.sendEmailWithTemplate({
-      templateId: sendGridEmailTemplates.resetPassword,
+      templateAlias: sendGridEmailTemplates.resetPassword,
       recipient: user.email,
       dynamicTemplateData: {
         resetUrl: `${this.configService.get('siteUrl')}/auth/reset-password?token=${token}&userId=${user.id}`,
@@ -642,7 +642,7 @@ export class AuthService {
 
   private async sendEmailVerificationEmail(user: User, token: string, throwOnFailure = false): Promise<boolean> {
     const emailResult = await this.emailService.sendEmailWithTemplate({
-      templateId: sendGridEmailTemplates.emailVerification,
+      templateAlias: sendGridEmailTemplates.emailVerification,
       recipient: user.email,
       dynamicTemplateData: {
         username: user.username,

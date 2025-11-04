@@ -56,3 +56,7 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 uploads/
+
+# Gmail credentials JSON files (contain secrets)
+client_secret_*.json
+*client_secret*.json

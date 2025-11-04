@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { EmailService } from './email.service';
-import { SendGridClient } from './sendgrid-client';
+import { GmailService } from './gmail.service';
+import { GmailAuthController } from './gmail-auth.controller';
 
 @Module({
-  providers: [EmailService, SendGridClient],
+  controllers: [GmailAuthController],
+  providers: [EmailService, GmailService],
   exports: [EmailService],
 })
 export class EmailModule {}

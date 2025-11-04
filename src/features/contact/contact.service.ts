@@ -11,10 +11,10 @@ export class ContactService {
   constructor(private readonly emailService: EmailService, private readonly configService: ConfigService) {}
 
   async submitContactForm(contactData: ContactDto): Promise<{ message: string; success: boolean }> {
-    // Send notification email to admin using SendGrid template
+    // Send notification email to admin using Postmark template
     const adminEmailResult = await this.emailService.sendEmailWithTemplate({
       recipient: this.configService.get('contact.supportEmail'),
-      templateId: sendGridEmailTemplates.contactForm, // Your SendGrid template ID for admin notifications
+      templateAlias: sendGridEmailTemplates.contactForm, // Your Postmark template alias for admin notifications
       dynamicTemplateData: {
         logoUrl: images.logo,
         firstName: contactData.firstName,
@@ -27,10 +27,10 @@ export class ContactService {
       },
     });
 
-    // Send acknowledgment email to user using SendGrid template
+    // Send acknowledgment email to user using Postmark template
     const userEmailResult = await this.emailService.sendEmailWithTemplate({
       recipient: contactData.email,
-      templateId: sendGridEmailTemplates.acknowledgment, // Your SendGrid template ID for user acknowledgments
+      templateAlias: sendGridEmailTemplates.acknowledgment, // Your Postmark template alias for user acknowledgments
       dynamicTemplateData: {
         logoUrl: images.logo,
         firstName: contactData.firstName,

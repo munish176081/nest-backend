@@ -15,7 +15,10 @@
     "lint": "eslint \"src/**/*.ts\" --fix",
     "seed": "ts-node seed-standalone.ts",
     "import:csv": "ts-node import-csv-users.ts",
-    "import:csv:dry": "DRY_RUN=true ts-node import-csv-users.ts"
+    "import:csv:dry": "DRY_RUN=true ts-node import-csv-users.ts",
+    "test:email": "ts-node test-email-templates.ts",
+    "test:email:template": "ts-node test-email-templates.ts",
+    "test:email:list": "ts-node test-email-templates.ts list"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.540.0",
@@ -31,7 +34,7 @@
     "@nestjs/platform-socket.io": "^10.4.1",
     "@nestjs/typeorm": "^10.0.2",
     "@nestjs/websockets": "^10.4.1",
-    "@sendgrid/mail": "^8.1.3",
+    "postmark": "^3.0.0",
     "@types/nodemailer": "^6.4.17",
     "@types/socket.io": "^3.0.2",
     "bcryptjs": "^2.4.3",

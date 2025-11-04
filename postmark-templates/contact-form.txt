@@ -1,0 +1,14 @@
+New Contact Form Submission
+
+You have received a new contact form submission. Here are the details:
+
+Name: {{firstName}} {{lastName}}
+Email: {{email}}
+{{#phone}}Phone: {{phone}}{{/phone}}
+Subject: {{subject}}
+
+Message:
+{{message}}
+
+Submitted: {{submissionDate}}
+

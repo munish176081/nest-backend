@@ -1,0 +1,13 @@
+Thank You for Your Inquiry
+
+Hello {{firstName}},
+
+Thank you for reaching out to us! We have received your inquiry and one of our team members will get back to you as soon as possible.
+
+Subject: {{subject}}
+Submitted: {{submissionDate}}
+
+We typically respond within 24-48 hours. If your inquiry is urgent, please don't hesitate to contact us directly.
+
+This is an automated confirmation email. Please do not reply to this message.
+

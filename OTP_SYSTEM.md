@@ -172,7 +172,7 @@ User Requests Reset → Check Config → OTP Enabled? → Yes → Generate OTP �
 
 ## Email Templates
 
-The system uses existing SendGrid templates but passes different data:
+The system uses Postmark templates (configured in Postmark dashboard) and passes dynamic data:
 
 ### OTP Email Template Data
 ```typescript
