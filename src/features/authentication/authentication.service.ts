@@ -13,7 +13,7 @@ import { ExternalAuthAccount } from './entities/external-auth-accounts.entity';
 import { DataSource, Repository } from 'typeorm';
 import { SignupDto } from './dto/signup.dto';
 import { EmailService } from '../email/email.service';
-import { sendGridEmailTemplates } from '../email/templates';
+import { sendGridEmailTemplates, images } from '../email/templates';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 import { randomBytes } from 'crypto';
@@ -522,6 +522,7 @@ export class AuthService {
       templateAlias: sendGridEmailTemplates.emailVerificationWithOtp,
       recipient: user.email,
       dynamicTemplateData: {
+        logoUrl: images.logo,
         username: user.name,
         otp: otp,
         verificationUrl: `${this.configService.get('apiUrl')}/api/v1/auth/verify-email-otp`,
@@ -561,6 +562,7 @@ export class AuthService {
       templateAlias: sendGridEmailTemplates.resetPasswordWithOtp,
       recipient: user.email,
       dynamicTemplateData: {
+        logoUrl: images.logo,
         otp: otp,
         resetUrl: `${this.configService.get('siteUrl')}/auth/reset-password-otp?email=${user.email}`,
       },

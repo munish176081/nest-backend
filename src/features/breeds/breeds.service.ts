@@ -283,10 +283,17 @@ export class BreedsService {
       const breeds = [];
       const errors = [];
       let imported = 0;
+      let updated = 0;
+      let duplicates = 0;
 
       for (let i = 1; i < rows.length; i++) {
         try {
           const values = rows[i];
+          
+          // Skip empty rows
+          if (values.every(v => !v || v.trim() === '')) {
+            continue;
+          }
           
           if (values.length !== headers.length) {
             errors.push(`Row ${i + 1}: Column count mismatch (expected ${headers.length}, got ${values.length})`);
@@ -323,17 +330,49 @@ export class BreedsService {
             continue;
           }
 
-          // Check if breed already exists (ignore soft-deleted)
-          const existingBreed = await this.breedRepository.findOne({
-            where: [
-              { name: breedData.name, deletedAt: null } as any,
-              { slug: breedData.slug, deletedAt: null } as any
-            ]
-          });
+          // Check if breed already exists (including soft-deleted to restore them)
+          const existingBreed = await this.breedRepository
+            .createQueryBuilder('breed')
+            .where(
+              '(breed.name = :name OR breed.slug = :slug)',
+              { name: breedData.name, slug: breedData.slug }
+            )
+            .getOne();
 
           if (existingBreed) {
-            errors.push(`Row ${i + 1}: Breed with name "${breedData.name}" or slug "${breedData.slug}" already exists`);
-            continue;
+            // Check if breed is soft-deleted or active
+            if (existingBreed.deletedAt === null) {
+              // Breed exists and is active - this is a duplicate
+              duplicates++;
+              continue;
+            } else {
+              // Breed exists but is soft-deleted - restore and update it
+              try {
+                // Only update fields that have values, preserve existing values for empty fields
+                const updateData: any = {
+                  deletedAt: null, // Restore if soft-deleted
+                  updatedAt: new Date(),
+                };
+                
+                // Only include fields that have non-empty values
+                if (breedData.name) updateData.name = breedData.name;
+                if (breedData.slug) updateData.slug = breedData.slug;
+                if (breedData.category !== undefined) updateData.category = breedData.category;
+                if (breedData.size !== undefined) updateData.size = breedData.size;
+                if (breedData.description !== undefined) updateData.description = breedData.description;
+                if (breedData.temperament !== undefined) updateData.temperament = breedData.temperament;
+                if (breedData.lifeExpectancy !== undefined) updateData.lifeExpectancy = breedData.lifeExpectancy;
+                if (breedData.sortOrder !== undefined) updateData.sortOrder = breedData.sortOrder;
+                if (breedData.isActive !== undefined) updateData.isActive = breedData.isActive;
+                
+                await this.breedRepository.update(existingBreed.id, updateData);
+                imported++;
+                updated++;
+              } catch (updateError) {
+                errors.push(`Row ${i + 1}: Failed to restore existing breed "${breedData.name}": ${updateError.message}`);
+              }
+              continue;
+            }
           }
 
           breeds.push(breedData);
@@ -343,22 +382,45 @@ export class BreedsService {
         }
       }
 
-      if (breeds.length === 0) {
+      // Check if we have any breeds to import (either new or updated)
+      if (imported === 0 && duplicates === 0) {
         return {
           success: false,
           message: 'No valid breeds to import',
           imported: 0,
+          duplicates: 0,
+          updated: 0,
           errors
         };
       }
 
-      // Bulk insert breeds
-      await this.breedRepository.save(breeds);
+      // Bulk insert new breeds (updated breeds are already saved)
+      if (breeds.length > 0) {
+        await this.breedRepository.save(breeds);
+      }
+
+      // Build success message
+      const parts = [];
+      if (imported - updated > 0) {
+        parts.push(`${imported - updated} new breed${imported - updated !== 1 ? 's' : ''}`);
+      }
+      if (updated > 0) {
+        parts.push(`${updated} breed${updated !== 1 ? 's' : ''} restored`);
+      }
+      if (duplicates > 0) {
+        parts.push(`${duplicates} duplicate${duplicates !== 1 ? 's' : ''} found`);
+      }
+      
+      const message = parts.length > 0 
+        ? `Successfully imported ${imported} breed${imported !== 1 ? 's' : ''}. ${parts.join(', ')}.`
+        : `Successfully imported ${imported} breed${imported !== 1 ? 's' : ''}`;
 
       return {
         success: true,
-        message: `Successfully imported ${imported} breeds`,
+        message,
         imported,
+        duplicates,
+        updated,
         errors
       };
 
@@ -435,6 +497,11 @@ export class BreedsService {
     for (let i = 0; i < headers.length; i++) {
       const header = headers[i];
       const value = values[i]?.trim();
+      
+      // Skip empty values
+      if (!value || value === '') {
+        continue;
+      }
       
       switch (header) {
         case 'Breed Name':

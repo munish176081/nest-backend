@@ -32,13 +32,28 @@ export class PostmarkClient {
     this.client = new ServerClient(apiKey);
   }
 
+  /**
+   * Formats the From field with display name "pups4sale"
+   */
+  private formatFromField(email: string): string {
+    // If email already contains a display name, extract just the email
+    const emailMatch = email.match(/<(.+)>/);
+    const emailAddress = emailMatch ? emailMatch[1] : email;
+    
+    // Format as "pups4sale <email@example.com>"
+    return `pups4sale <${emailAddress}>`;
+  }
+
   async send(options: PostmarkEmailOptions): Promise<EmailSendResult> {
     try {
+      // Format From field with display name "pups4sale"
+      const fromField = this.formatFromField(options.from);
+      
       if (options.templateId || options.templateAlias) {
         // Send email with template
         // Postmark accepts either TemplateId OR TemplateAlias, not both
         const templateParams: any = {
-          From: options.from,
+          From: fromField,
           To: options.to,
           TemplateModel: options.templateModel || {},
         };
@@ -56,7 +71,7 @@ export class PostmarkClient {
       } else {
         // Send plain email
         await this.client.sendEmail({
-          From: options.from,
+          From: fromField,
           To: options.to,
           Subject: options.subject || '',
           HtmlBody: options.htmlBody,

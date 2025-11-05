@@ -74,6 +74,20 @@ export class GmailService {
   }
 
   /**
+   * Gets the authenticated user's email address
+   */
+  private async getUserEmail(): Promise<string> {
+    try {
+      const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client });
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      return profile.data.emailAddress || '';
+    } catch (error) {
+      this.logger.warn('Failed to get user email from Gmail profile, using fallback');
+      return '';
+    }
+  }
+
+  /**
    * Sends an email using Gmail API
    * @param to Recipient email address
    * @param subject Email subject
@@ -91,8 +105,22 @@ export class GmailService {
 
       const gmail = google.gmail({ version: 'v1', auth: this.oauth2Client });
 
+      // Get sender email address
+      let senderEmail = from;
+      if (!senderEmail) {
+        senderEmail = await this.getUserEmail();
+      }
+
+      // Extract email address if it already contains a display name (e.g., "admin <email@example.com>")
+      const emailMatch = senderEmail?.match(/<(.+)>/);
+      const emailAddress = emailMatch ? emailMatch[1] : senderEmail;
+
+      // Format From header with display name "pups4sale"
+      const fromHeader = emailAddress ? `pups4sale <${emailAddress}>` : 'pups4sale';
+
       // Build email message
       const messageParts = [
+        `From: ${fromHeader}`,
         `To: ${to}`,
         `Subject: ${subject}`,
         'Content-Type: text/html; charset=utf-8',
