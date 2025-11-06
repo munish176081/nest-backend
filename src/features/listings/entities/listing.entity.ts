@@ -201,6 +201,9 @@ export class Listing {
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  isImportedFromCsv: boolean;
+
   @Column({ type: 'jsonb', nullable: true })
   seoData: {
     slug?: string;

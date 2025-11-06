@@ -130,9 +130,12 @@ export class UploadController {
     }
 
     try {
-      // Validate that the URL is from our CDN
-      if (!imageUrl.includes('cdn.pups4sale.com.au')) {
-        this.logger.warn(`Invalid image URL (not from CDN): ${imageUrl}`);
+      // Validate that the URL is from our domains
+      const allowedDomains = ['cdn.pups4sale.com.au', 'pups4sale.com.au', 'www.pups4sale.com.au'];
+      const isAllowedDomain = allowedDomains.some(domain => imageUrl.includes(domain));
+      
+      if (!isAllowedDomain) {
+        this.logger.warn(`Invalid image URL (not from allowed domain): ${imageUrl}`);
         return res.status(403).json({ error: 'Invalid image URL' });
       }
 
