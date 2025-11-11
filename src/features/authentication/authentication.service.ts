@@ -177,7 +177,7 @@ export class AuthService {
 
     if (existUser) {
       throw new BadRequestException(
-        `Email already exists`,
+        `If an account with that email exists, we’ll send you a password reset link`,
       );
     }
 

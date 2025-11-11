@@ -60,3 +60,27 @@ uploads/
 # Gmail credentials JSON files (contain secrets)
 client_secret_*.json
 *client_secret*.json
+
+# Migration and data migration files
+*-migration.sql
+*migrated*.sql
+*migration*.sql
+DELETE_MIGRATED_DATA.sql
+cleanup-migration.sql
+add-is-imported-from-csv-column.sql
+migrate-mysql-to-postgres.ts
+compare-mysql-to-postgres.ts
+cleanup-migrated-data.ts
+analyze-mysql-backup.ts
+import-csv-users.ts
+MIGRATION_PASSWORDS.md
+*-report.json
+*-analysis.json
+deep-mysql-analysis.json
+mysql-backup-analysis.json
+compare-report.json
+migration-report.json
+deep-analysis.log
+
+# One-off migration files in migrations folder
+src/database/migrations/*AddIsImportedFromCsv*.ts
