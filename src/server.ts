@@ -51,6 +51,7 @@ async function initializeApplication() {
     }),
   );
 
+  console.log("i am here in server.ts");
   // serve static files
   application.use('/uploads', express.static(join(__dirname, '..', 'uploads')));
 
