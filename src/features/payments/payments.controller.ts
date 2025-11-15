@@ -1,8 +1,10 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   Req,
+  Param,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -96,7 +98,7 @@ export class PaymentsController {
       throw new UnauthorizedException('User ID is missing. Please log in again.');
     }
     
-    console.log('Creating PayPal order for user:', req.user.id);
+    console.log('💰 [PayPal] Controller: Creating PayPal order for user:', req.user.id);
     
     const orderId = await this.paymentsService.createPayPalOrder(
       createOrderDto.amount,
@@ -122,6 +124,19 @@ export class PaymentsController {
       capturePaymentDto.orderId,
       req.user.id,
     );
+  }
+
+  @UseGuards(LoggedInGuard)
+  @Get(':id')
+  async getPaymentById(
+    @Req() req: Request,
+    @Param('id') id: string,
+  ) {
+    if (!req.user || !req.user.id) {
+      throw new UnauthorizedException('User ID is missing. Please log in again.');
+    }
+    
+    return await this.paymentsService.getPaymentById(id, req.user.id);
   }
 }
 

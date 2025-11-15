@@ -208,6 +208,10 @@ export class Listing {
   @Index()
   paymentId: string | null;
 
+  @Column({ type: 'uuid', nullable: true, name: 'subscription_id' })
+  @Index()
+  subscriptionId: string | null;
+
   @Column({ type: 'jsonb', nullable: true })
   seoData: {
     slug?: string;

@@ -20,6 +20,7 @@ import { BlogPost } from './features/blogs/entities/blog-post.entity';
 import { BlogCategory } from './features/blogs/entities/blog-category.entity';
 import { ActivityLog } from './features/accounts/entities/activity-log.entity';
 import { Payment } from './features/payments/entities/payment.entity';
+import { Subscription } from './features/subscriptions/entities/subscription.entity';
 // Temporarily commented out to avoid schema conflicts
 // import { ListingType } from './features/listings/entities/listing-type.entity';
 // import { ListingFile } from './features/listings/entities/listing-file.entity';
@@ -36,6 +37,7 @@ import { MeetingsModule } from './features/meetings/meetings.module';
 import { WishlistModule } from './features/wishlist/wishlist.module';
 import { BlogsModule } from './features/blogs/blogs.module';
 import { PaymentsModule } from './features/payments/payments.module';
+import { SubscriptionsModule } from './features/subscriptions/subscriptions.module';
 
 
 @Module({
@@ -51,7 +53,7 @@ import { PaymentsModule } from './features/payments/payments.module';
           type: 'postgres',
           url: configService.get('dbUrl'),
           synchronize: true, // Re-enabled after fixing database
-          entities: [ExternalAuthAccount, User, Upload, Listing, Breed, BreedTypeImage, Conversation, Message, Participant, Meeting, UserCalendarTokens, Wishlist, BlogPost, BlogCategory, ActivityLog, Payment],
+          entities: [ExternalAuthAccount, User, Upload, Listing, Breed, BreedTypeImage, Conversation, Message, Participant, Meeting, UserCalendarTokens, Wishlist, BlogPost, BlogCategory, ActivityLog, Payment, Subscription],
           namingStrategy: new SnakeCaseNamingStrategy(),
           logging: false,
     
@@ -80,6 +82,7 @@ import { PaymentsModule } from './features/payments/payments.module';
     WishlistModule,
     BlogsModule,
     PaymentsModule,
+    SubscriptionsModule,
   ],
   providers: [],
 })

@@ -1,9 +1,11 @@
-import { Injectable, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import Stripe from 'stripe';
 import { Payment, PaymentStatusEnum, PaymentMethodEnum } from './entities/payment.entity';
+import { Listing } from '../listings/entities/listing.entity';
+import { PaymentLogsService } from './payment-logs.service';
 
 // PayPal SDK doesn't have proper ES6 exports, use require
 const paypal = require('@paypal/checkout-server-sdk');
@@ -17,6 +19,9 @@ export class PaymentsService {
     private configService: ConfigService,
     @InjectRepository(Payment)
     private paymentRepository: Repository<Payment>,
+    @InjectRepository(Listing)
+    private listingRepository: Repository<Listing>,
+    private paymentLogsService: PaymentLogsService,
   ) {
     // Initialize Stripe
     const stripeSecretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
@@ -65,9 +70,37 @@ export class PaymentsService {
     }
 
     try {
+      // Get or create Stripe customer with user email/phone
+      let customerId: string;
+      const user = await this.listingRepository.manager
+        .getRepository('users')
+        .findOne({ where: { id: userId } });
+
+      // Try to find existing customer
+      const existingCustomers = await this.stripe.customers.list({
+        email: user?.email,
+        limit: 1,
+      });
+
+      if (existingCustomers.data.length > 0) {
+        customerId = existingCustomers.data[0].id;
+        console.log('✅ [Payment] Using existing Stripe customer:', customerId);
+      } else {
+        // Create new customer with user info
+        const customer = await this.stripe.customers.create({
+          email: user?.email,
+          phone: user?.phone,
+          name: user?.name,
+          metadata: { userId },
+        });
+        customerId = customer.id;
+        console.log('✅ [Payment] Created new Stripe customer:', customerId);
+      }
+
       const paymentIntent = await this.stripe.paymentIntents.create({
         amount, // Amount is already in cents
         currency: 'usd',
+        customer: customerId, // Associate with customer so Stripe form doesn't ask for email/phone
         metadata: {
           userId,
           listingType,
@@ -174,6 +207,18 @@ export class PaymentsService {
         
         console.log('Payment saved successfully with id:', savedPayment.id, 'userId:', savedPayment.userId);
         
+        // Log payment creation
+        this.paymentLogsService.logPaymentCreated({
+          userId: validatedUserId,
+          paymentId: savedPayment.id,
+          listingId: listingId || undefined,
+          amount: amount / 100,
+          currency: 'USD',
+          provider: 'stripe',
+          listingType,
+          metadata: { paymentIntentId: paymentIntent.id },
+        });
+        
         return {
           clientSecret: paymentIntent.client_secret!,
           paymentId: savedPayment.id,
@@ -188,6 +233,16 @@ export class PaymentsService {
           originalUserId: userId,
         });
         
+        // Log payment failure
+        this.paymentLogsService.logPaymentFailed({
+          userId: validatedUserId,
+          amount: amount / 100,
+          currency: 'USD',
+          provider: 'stripe',
+          error: saveError instanceof Error ? saveError : new Error(saveError.message || 'Unknown error'),
+          metadata: { listingType, listingId },
+        });
+        
         // Check if it's a constraint violation
         if (saveError.message && saveError.message.includes('userId') && saveError.message.includes('not-null')) {
           throw new BadRequestException('User ID is missing. Please log in again and try again.');
@@ -197,6 +252,16 @@ export class PaymentsService {
       }
     } catch (error: any) {
       console.error('Error creating Stripe payment intent:', error);
+      
+      // Log payment failure
+      this.paymentLogsService.logPaymentFailed({
+        userId,
+        amount: amount / 100,
+        currency: 'USD',
+        provider: 'stripe',
+        error: error instanceof Error ? error : new Error(error.message || 'Unknown error'),
+        metadata: { listingType, listingId },
+      });
       
       // If it's already a BadRequestException, re-throw it
       if (error instanceof BadRequestException) {
@@ -327,9 +392,39 @@ export class PaymentsService {
         };
         await this.paymentRepository.save(payment);
 
+        // Log payment confirmation
+        const listingId = confirmed.metadata.listingId || payment.listingId;
+        this.paymentLogsService.logPaymentConfirmed({
+          userId: payment.userId,
+          paymentId: payment.id,
+          listingId: listingId || undefined,
+          amount: payment.amount,
+          currency: payment.currency,
+          provider: 'stripe',
+          status: payment.status,
+          metadata: { paymentIntentId: confirmed.id },
+        });
+
+        // Update listing's paymentId if listingId exists
+        if (listingId) {
+          try {
+            console.log('💳 [Stripe] Updating listing paymentId:', { listingId, paymentId: payment.id });
+            await this.listingRepository
+              .createQueryBuilder()
+              .update(Listing)
+              .set({ paymentId: payment.id })
+              .where('id = :listingId', { listingId })
+              .execute();
+            console.log('💳 [Stripe] Listing paymentId updated successfully');
+          } catch (updateError) {
+            console.error('💳 [Stripe] Error updating listing paymentId:', updateError);
+            // Don't throw error - payment is already successful, just log the issue
+          }
+        }
+
         return {
           success: true,
-          listingId: confirmed.metadata.listingId,
+          listingId: listingId || confirmed.metadata.listingId || undefined,
           paymentId: payment.id,
         };
       }
@@ -343,11 +438,24 @@ export class PaymentsService {
       };
       await this.paymentRepository.save(payment);
 
+      // Log payment failure
+      this.paymentLogsService.logPaymentFailed({
+        userId: payment.userId,
+        paymentId: payment.id,
+        listingId: payment.listingId || undefined,
+        amount: payment.amount,
+        currency: payment.currency,
+        provider: 'stripe',
+        error: new Error('Payment confirmation failed'),
+        metadata: { paymentIntentId: confirmed.id },
+      });
+
       throw new BadRequestException('Payment confirmation failed');
     } catch (error: any) {
       // Update payment record to failed if it exists
+      let payment: Payment | null = null;
       try {
-        const payment = await this.paymentRepository.findOne({
+        payment = await this.paymentRepository.findOne({
           where: { paymentIntentId, userId },
         });
         if (payment) {
@@ -363,6 +471,15 @@ export class PaymentsService {
       }
 
       console.error('Error confirming Stripe payment:', error);
+      
+      // Log payment failure
+      this.paymentLogsService.logPaymentFailed({
+        userId,
+        paymentId: payment?.id,
+        provider: 'stripe',
+        error: error instanceof Error ? error : new Error(error.message || 'Unknown error'),
+        metadata: { paymentIntentId },
+      });
       throw new BadRequestException(
         error.message || 'Failed to confirm payment',
       );
@@ -375,15 +492,20 @@ export class PaymentsService {
     userId: string,
     listingId?: string,
   ): Promise<{ orderId: string; paymentId: string }> {
+    console.log('💰 [PayPal] createPayPalOrder called:', { amount, listingType, userId, listingId });
+    
     if (!userId) {
+      console.error('💰 [PayPal] Error: User ID is required');
       throw new BadRequestException('User ID is required to create a payment');
     }
     
     if (!this.paypalClient) {
+      console.error('💰 [PayPal] Error: PayPal client not configured');
       throw new InternalServerErrorException('PayPal is not configured');
     }
 
     try {
+      console.log('💰 [PayPal] Creating PayPal order request...');
       const request = new paypal.orders.OrdersCreateRequest();
       request.prefer('return=representation');
       request.requestBody({
@@ -404,6 +526,7 @@ export class PaymentsService {
       });
 
       const order = await this.paypalClient.execute(request);
+      console.log('💰 [PayPal] Order created successfully:', { orderId: order.result.id, status: order.result.status });
 
       // Create payment record in database
       // Double-check userId before creating payment
@@ -488,12 +611,37 @@ export class PaymentsService {
         metadata: rawPayment.metadata,
       } as Payment;
 
+      console.log('💰 [PayPal] Payment record saved successfully:', { paymentId: savedPayment.id, orderId: order.result.id });
+      
+      // Log payment creation
+      this.paymentLogsService.logPaymentCreated({
+        userId: validatedUserId,
+        paymentId: savedPayment.id,
+        listingId: listingId || undefined,
+        amount: amount,
+        currency: 'USD',
+        provider: 'paypal',
+        listingType,
+        metadata: { paypalOrderId: order.result.id },
+      });
+      
       return {
         orderId: order.result.id!,
         paymentId: savedPayment.id,
       };
     } catch (error: any) {
-      console.error('Error creating PayPal order:', error);
+      console.error('💰 [PayPal] Error creating PayPal order:', error);
+      
+      // Log payment failure
+      this.paymentLogsService.logPaymentFailed({
+        userId,
+        amount: amount,
+        currency: 'USD',
+        provider: 'paypal',
+        error: error instanceof Error ? error : new Error(error.message || 'Unknown error'),
+        metadata: { listingType, listingId },
+      });
+      
       throw new BadRequestException(
         error.message || 'Failed to create PayPal order',
       );
@@ -504,16 +652,21 @@ export class PaymentsService {
     orderId: string,
     userId: string,
   ): Promise<{ success: boolean; listingId?: string; paymentId: string }> {
+    console.log('💰 [PayPal] capturePayPalPayment called:', { orderId, userId });
+    
     if (!userId) {
+      console.error('💰 [PayPal] Error: User ID is required for capture');
       throw new BadRequestException('User ID is required to capture a payment');
     }
     
     if (!this.paypalClient) {
+      console.error('💰 [PayPal] Error: PayPal client not configured');
       throw new InternalServerErrorException('PayPal is not configured');
     }
 
     try {
       // Find existing payment record
+      console.log('💰 [PayPal] Looking for payment record with orderId:', orderId);
       let payment = await this.paymentRepository.findOne({
         where: { paypalOrderId: orderId, userId },
       });
@@ -530,10 +683,12 @@ export class PaymentsService {
       request.requestBody({});
 
       const capture = await this.paypalClient.execute(request);
+      console.log('💰 [PayPal] Capture response:', { status: capture.result.status, captureId: capture.result.id });
 
       if (capture.result.status === 'COMPLETED') {
+        console.log('💰 [PayPal] Payment completed successfully');
         const purchaseUnit = capture.result.purchase_units?.[0];
-        const listingId = purchaseUnit?.invoice_id;
+        const listingId = purchaseUnit?.invoice_id || payment.listingId;
         const captureId = capture.result.id;
 
         // Update payment record to completed
@@ -545,6 +700,35 @@ export class PaymentsService {
           paypalOrder: capture.result,
         };
         await this.paymentRepository.save(payment);
+
+        // Log payment confirmation
+        this.paymentLogsService.logPaymentConfirmed({
+          userId: payment.userId,
+          paymentId: payment.id,
+          listingId: listingId || undefined,
+          amount: payment.amount,
+          currency: payment.currency,
+          provider: 'paypal',
+          status: payment.status,
+          metadata: { paypalOrderId: orderId, paypalCaptureId: captureId },
+        });
+
+        // Update listing's paymentId if listingId exists
+        if (listingId) {
+          try {
+            console.log('💰 [PayPal] Updating listing paymentId:', { listingId, paymentId: payment.id });
+            await this.listingRepository
+              .createQueryBuilder()
+              .update(Listing)
+              .set({ paymentId: payment.id })
+              .where('id = :listingId', { listingId })
+              .execute();
+            console.log('💰 [PayPal] Listing paymentId updated successfully');
+          } catch (updateError) {
+            console.error('💰 [PayPal] Error updating listing paymentId:', updateError);
+            // Don't throw error - payment is already successful, just log the issue
+          }
+        }
 
         return {
           success: true,
@@ -561,6 +745,18 @@ export class PaymentsService {
         paypalOrder: capture.result,
       };
       await this.paymentRepository.save(payment);
+
+      // Log payment failure
+      this.paymentLogsService.logPaymentFailed({
+        userId: payment.userId,
+        paymentId: payment.id,
+        listingId: payment.listingId || undefined,
+        amount: payment.amount,
+        currency: payment.currency,
+        provider: 'paypal',
+        error: new Error('Payment capture failed'),
+        metadata: { orderId, paypalCaptureId: capture.result.id },
+      });
 
       throw new BadRequestException('Payment capture failed');
     } catch (error: any) {
@@ -581,11 +777,23 @@ export class PaymentsService {
         console.error('Error updating payment record:', updateError);
       }
 
-      console.error('Error capturing PayPal payment:', error);
+      console.error('💰 [PayPal] Error capturing PayPal payment:', error);
       throw new BadRequestException(
         error.message || 'Failed to capture payment',
       );
     }
+  }
+
+  async getPaymentById(paymentId: string, userId: string): Promise<Payment> {
+    const payment = await this.paymentRepository.findOne({
+      where: { id: paymentId, userId },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+
+    return payment;
   }
 }
 

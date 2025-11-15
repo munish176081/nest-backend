@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { ListingsRepository } from './listings.repository';
 import { CreateListingDto, UpdateListingDto } from './dto';
 import { QueryListingDto, SearchListingDto } from './dto/query-listing.dto';
@@ -8,6 +10,8 @@ import { BreedsService } from '../breeds/breeds.service';
 import { calculateAge } from '../../helpers/date';
 import { UsersService } from '../accounts/users.service';
 import { ActivityLogsService } from '../accounts/activity-logs.service';
+import { Payment } from '../payments/entities/payment.entity';
+import { Subscription } from '../subscriptions/entities/subscription.entity';
 
 @Injectable()
 export class ListingsService {
@@ -17,6 +21,12 @@ export class ListingsService {
     private readonly usersService: UsersService,
     @Inject(forwardRef(() => ActivityLogsService))
     private readonly activityLogsService: ActivityLogsService,
+    @InjectRepository(Payment)
+    private readonly paymentRepository: Repository<Payment>,
+    @InjectRepository(Subscription)
+    private readonly subscriptionRepository: Repository<Subscription>,
+    @InjectRepository(Listing)
+    private readonly listingRepository: Repository<Listing>,
   ) { }
 
   async createListing(createListingDto: CreateListingDto, userId: string, ipAddress?: string, userAgent?: string): Promise<ListingResponseDto> {
@@ -81,9 +91,51 @@ export class ListingsService {
       fatherInfo: createListingDto.fatherInfo,
       studInfo: createListingDto.studInfo,
       paymentId: createListingDto.paymentId || null,
+      subscriptionId: createListingDto.subscriptionId || null,
     };
 
     const listing = await this.listingsRepository.create(listingData);
+    
+    // If listing was created with a paymentId, update the payment record's listingId
+    if (listing.paymentId) {
+      try {
+        console.log('🔗 Linking payment to listing:', { paymentId: listing.paymentId, listingId: listing.id });
+        await this.paymentRepository
+          .createQueryBuilder()
+          .update(Payment)
+          .set({ listingId: listing.id })
+          .where('id = :paymentId', { paymentId: listing.paymentId })
+          .execute();
+        console.log('✅ Payment linked to listing successfully');
+      } catch (error) {
+        console.error('❌ Error linking payment to listing:', error);
+        // Don't throw error - listing is already created, just log the issue
+      }
+    }
+
+    // If listing was created with a subscriptionId, update the subscription record's listingId
+    if (listing.subscriptionId) {
+      try {
+        console.log('🔗 Linking subscription to listing:', { subscriptionId: listing.subscriptionId, listingId: listing.id });
+        const subscription = await this.subscriptionRepository.findOne({
+          where: { id: listing.subscriptionId },
+        });
+        
+        if (subscription) {
+          subscription.listingId = listing.id;
+          // Update expiration based on subscription period
+          if (subscription.currentPeriodEnd) {
+            listing.expiresAt = subscription.currentPeriodEnd;
+            await this.listingsRepository.update(listing.id, { expiresAt: subscription.currentPeriodEnd });
+          }
+          await this.subscriptionRepository.save(subscription);
+          console.log('✅ Subscription linked to listing successfully');
+        }
+      } catch (error) {
+        console.error('❌ Error linking subscription to listing:', error);
+        // Don't throw error - listing is already created, just log the issue
+      }
+    }
     
     // Log listing creation activity
     try {
@@ -569,8 +621,49 @@ export class ListingsService {
       // Add calculated age to summary
       age: calculatedAge || listing.fields?.age || '',
       paymentId: listing.paymentId || null,
+      subscriptionId: listing.subscriptionId || null,
     };
     
     return result;
+  }
+
+  /**
+   * Check and update expired listings based on subscription status
+   * Expired listings should be marked as expired but still visible (not hidden)
+   */
+  async checkAndUpdateExpiredListings(): Promise<void> {
+    const now = new Date();
+    
+    // Find listings that have expired but are still active
+    const expiredListings = await this.listingRepository
+      .createQueryBuilder('listing')
+      .where('listing.expiresAt < :now', { now })
+      .andWhere('listing.isActive = :isActive', { isActive: true })
+      .getMany();
+
+    for (const listing of expiredListings) {
+      // If listing has a subscription, check its status
+      if (listing.subscriptionId) {
+        const subscription = await this.subscriptionRepository.findOne({
+          where: { id: listing.subscriptionId },
+        });
+
+        if (subscription) {
+          // If subscription is active, update expiration to current period end
+          if (subscription.status === 'active' && subscription.currentPeriodEnd) {
+            listing.expiresAt = subscription.currentPeriodEnd;
+            await this.listingsRepository.update(listing.id, { expiresAt: subscription.currentPeriodEnd });
+            continue;
+          }
+        }
+      }
+
+      // Mark listing as expired but keep it visible (isActive = true)
+      // The status will be updated to 'expired' but listing remains visible
+      await this.listingsRepository.update(listing.id, { 
+        status: ListingStatusEnum.EXPIRED,
+        // Keep isActive = true so listing is still visible
+      });
+    }
   }
 } 

@@ -28,7 +28,9 @@
     "cleanup:migrated:check": "ts-node cleanup-migrated-data.ts",
     "test:email": "ts-node test-email-templates.ts",
     "test:email:template": "ts-node test-email-templates.ts",
-    "test:email:list": "ts-node test-email-templates.ts list"
+    "test:email:list": "ts-node test-email-templates.ts list",
+    "create:stripe:products": "ts-node scripts/create-stripe-products.ts",
+    "create:paypal:products": "ts-node scripts/create-paypal-products.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.540.0",

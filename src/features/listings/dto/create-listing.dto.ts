@@ -167,4 +167,8 @@ export class CreateListingDto {
   @IsOptional()
   @IsString()
   paymentId?: string;
+
+  @IsOptional()
+  @IsString()
+  subscriptionId?: string;
 } 
