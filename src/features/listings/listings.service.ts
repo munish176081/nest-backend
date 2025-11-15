@@ -80,6 +80,7 @@ export class ListingsService {
       motherInfo: createListingDto.motherInfo,
       fatherInfo: createListingDto.fatherInfo,
       studInfo: createListingDto.studInfo,
+      paymentId: createListingDto.paymentId || null,
     };
 
     const listing = await this.listingsRepository.create(listingData);
@@ -535,7 +536,15 @@ export class ListingsService {
       imageUrl: listing.user.imageUrl,
     } : null;
     
-    return {
+    // Debug logging for paymentId
+    console.log('🔍 PaymentId debug for listing:', {
+      listingId: listing.id,
+      title: listing.title,
+      paymentId: listing.paymentId,
+      paymentIdType: typeof listing.paymentId,
+    });
+    
+    const result = {
       id: listing.id,
       type: listing.type,
       status: listing.status,
@@ -559,6 +568,9 @@ export class ListingsService {
       fields: listing.fields,
       // Add calculated age to summary
       age: calculatedAge || listing.fields?.age || '',
+      paymentId: listing.paymentId || null,
     };
+    
+    return result;
   }
 } 

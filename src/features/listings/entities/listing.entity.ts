@@ -204,6 +204,10 @@ export class Listing {
   @Column({ type: 'boolean', default: false })
   isImportedFromCsv: boolean;
 
+  @Column({ type: 'uuid', nullable: true, name: 'payment_id' })
+  @Index()
+  paymentId: string | null;
+
   @Column({ type: 'jsonb', nullable: true })
   seoData: {
     slug?: string;

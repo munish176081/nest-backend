@@ -102,6 +102,15 @@ export const configValidationSchema = Joi.object({
   R2_ENDPOINT: Joi.string().optional(),
   R2_REGION: Joi.string().default('auto'),
   R2_PUBLIC_CDN: Joi.string().optional(),
+
+  // Stripe Configuration
+  STRIPE_SECRET_KEY: Joi.string().optional(),
+  STRIPE_PUBLISHABLE_KEY: Joi.string().optional(),
+
+  // PayPal Configuration
+  PAYPAL_CLIENT_ID: Joi.string().optional(),
+  PAYPAL_SECRET: Joi.string().optional(),
+  PAYPAL_ENVIRONMENT: Joi.string().valid('sandbox', 'production').default('sandbox'),
 });
 
 export const configConfiguration = () => {
@@ -166,8 +175,16 @@ export const configConfiguration = () => {
     contact: {
       supportEmail: process.env.CONTACT_SUPPORT_EMAIL,
     },
-    stripeSecretKey: process.env.STRIPE_SECRET_KEY,
-    stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    stripe: {
+      secretKey: process.env.STRIPE_SECRET_KEY,
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    },
+    paypal: {
+      clientId: process.env.PAYPAL_CLIENT_ID,
+      secret: process.env.PAYPAL_SECRET,
+      environment: process.env.PAYPAL_ENVIRONMENT || 'sandbox',
+    },
     cloudProvider: process.env.CLOUD_PROVIDER,
     r2: {
       accessKeyId: process.env.R2_ACCESS_KEY_ID,

@@ -163,4 +163,8 @@ export class CreateListingDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, any>;
+
+  @IsOptional()
+  @IsString()
+  paymentId?: string;
 } 

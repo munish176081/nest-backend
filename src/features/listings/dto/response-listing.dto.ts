@@ -185,6 +185,9 @@ export class ListingSummaryDto {
     username: string;
     imageUrl?: string;
   };
+
+  @Expose()
+  paymentId?: string | null;
 }
 
 export class PaginatedListingsResponseDto {
