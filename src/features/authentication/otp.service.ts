@@ -34,7 +34,7 @@ export class OtpService {
    * Store OTP in cache with expiry
    */
   async storeOtp(key: string, otp: string, expirySeconds: number = AuthConfig.OTP_EXPIRY_TIME): Promise<void> {
-    console.log(key, "STORE KEY")
+    console.log(key,otp, "STORE KEY")
     await this.cache.set(key, otp, 'EX', expirySeconds);
   }
 

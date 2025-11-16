@@ -27,13 +27,18 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoggedInGuard } from 'src/middleware/LoggedInGuard';
 import { VerifyEmailOtpDto } from './dto/verify-email-otp.dto';
 import { ResetPasswordOtpDto } from './dto/reset-password-otp.dto';
+import { RequestEmailVerifyDto } from './dto/request-email-verify.dto';
 import { AuthService } from './authentication.service';
 import { UserDto } from '../accounts/dto/user.dto';
 import { Serialize } from 'src/transformers/serialize.interceptor';
 import { parseIpFromReq } from 'src/helpers/parseIpFromReq';
+import { Logger } from '@nestjs/common';
+import { createUserTokenData } from 'src/helpers/createUserTokenData';
 
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly configService: ConfigService,
     private readonly authService: AuthService,
@@ -137,15 +142,9 @@ export class AuthController {
       const userAgent = req.get('User-Agent');
       const user = await this.authService.signUp(signupBody, ip, userAgent);
 
-      // Log the user in after signup
-      return new Promise((resolve, reject) => {
-        req.login(user, (err) => {
-          if (err) {
-            return reject(new BadRequestException('Signup successful but login failed. Please try logging in manually.'));
-          }
-          resolve(user);
-        });
-      });
+      // Return user data with email for frontend redirect to verification page
+      // User will be logged in after email verification
+      return user;
     } catch (error) {
       // Re-throw BadRequestException as-is (user-friendly errors)
       if (error instanceof BadRequestException) {
@@ -169,6 +168,14 @@ export class AuthController {
     return this.authService.requestEmailVerify(req.user.email);
   }
 
+  @Post('request-verify-email-code-by-email')
+  requestEmailVerifyByEmail(@Body() requestEmailVerifyDto: RequestEmailVerifyDto) {
+    // This endpoint doesn't require login - used for registration flow
+    // where user is not yet logged in but needs to resend verification code
+    // Allow already verified users to receive code (they need it to log in)
+    return this.authService.requestEmailVerify(requestEmailVerifyDto.email, true);
+  }
+
   @Get('verify-email')
   async verifyEmail(
     @Query() verifyEmailBody: VerifyEmailDto,
@@ -184,12 +191,39 @@ export class AuthController {
   }
 
   @Post('verify-email-otp')
-  async verifyEmailOtp(@Body() verifyEmailOtpBody: VerifyEmailOtpDto) {
+  async verifyEmailOtp(@Body() verifyEmailOtpBody: VerifyEmailOtpDto, @Req() req: Request) {
     console.log(verifyEmailOtpBody);
     if (verifyEmailOtpBody.userLoggedIn) {
+      // User is already logged in, just verify email
       return await this.authService.verifyEmailOtp(verifyEmailOtpBody);
     } else {
-      return await this.authService.resetEmailOtp(verifyEmailOtpBody);
+      // User is not logged in - could be registration flow or password reset
+      // Try email verification first (for registration flow)
+      try {
+        const result = await this.authService.verifyEmailOtp(verifyEmailOtpBody);
+        
+        // If verification succeeded and we have user data, log them in (registration flow)
+        if (result.user) {
+          return new Promise((resolve, reject) => {
+            // Format user data for session (same as login flow)
+            const userTokenData = createUserTokenData(result.user);
+            req.login(userTokenData, (err) => {
+              if (err) {
+                this.logger.error('Failed to log in user after email verification:', err);
+                return reject(new BadRequestException('Email verified but login failed. Please try logging in manually.'));
+              }
+              // Return user data for frontend
+              resolve(result.user);
+            });
+          });
+        }
+        
+        return result;
+      } catch (error) {
+        // If email verification fails, try password reset flow
+        // This handles the case where userLoggedIn=false but it's actually password reset
+        return await this.authService.resetEmailOtp(verifyEmailOtpBody);
+      }
     }
   }
 

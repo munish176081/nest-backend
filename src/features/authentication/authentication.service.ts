@@ -175,10 +175,31 @@ export class AuthService {
       email: signupBody.email,
     });
 
+    // If user exists, send verification email to existing account (prevent email enumeration)
     if (existUser) {
-      throw new BadRequestException(
-        `If an account with that email exists, we’ll send you a password reset link`,
-      );
+      try {
+        // Send verification email to existing user (do NOT create new account, do NOT update password)
+        if (AuthConfig.USE_OTP_FOR_EMAIL_VERIFICATION) {
+          await this.sendEmailVerificationOtp(existUser, false); // false = don't throw on failure
+        } else {
+          try {
+            const token = await this.cacheEmailVerificationToken(existUser);
+            await this.sendEmailVerificationEmail(existUser, token, false); // false = don't throw on failure
+          } catch (cooldownError) {
+            // If cooldown is active, that's okay - user can still verify with existing token/OTP
+            // Don't reveal email existence or cooldown status
+            this.logger.debug(`Cooldown active for existing user ${existUser.email}`);
+          }
+        }
+      } catch (error) {
+        // Log error but don't reveal email existence (security through obscurity)
+        this.logger.warn(`Failed to send verification email to existing user ${existUser.email}:`, error);
+        // Still return success to prevent email enumeration
+      }
+      
+      // Return success with email (same response as new user signup)
+      // Frontend will redirect to verification page
+      return existUser;
     }
 
     const hashedPassword = await this.hashPassword(signupBody.password);
@@ -351,7 +372,7 @@ export class AuthService {
     }
   }
 
-  async requestEmailVerify(email: string) {
+  async requestEmailVerify(email: string, allowAlreadyVerified = false) {
     const user = await this.usersService.getBy({
       email,
     });
@@ -360,7 +381,9 @@ export class AuthService {
       throw new BadRequestException('User not found with this email');
     }
 
-    if (user.status === 'active') {
+    // For registration flow, allow sending verification even if already verified
+    // (user needs to verify to log in)
+    if (user.status === 'active' && !allowAlreadyVerified) {
       throw new BadRequestException('User is already verified');
     }
 
@@ -415,10 +438,26 @@ export class AuthService {
     }
 
     const user = await this.usersService.getBy({ email });
-    await this.usersService.verifyUserByEmail(email);
+    
+    // Verify user (allow if already verified for registration flow)
+    try {
+      await this.usersService.verifyUserByEmail(email);
+    } catch (error) {
+      // If user is already verified, that's okay - still allow login
+      if (error instanceof BadRequestException && error.message === 'User already verified') {
+        // User is already verified, continue with login flow
+        this.logger.debug(`User ${email} is already verified, proceeding with login`);
+      } else {
+        // Re-throw other errors
+        throw error;
+      }
+    }
 
-    // Return userId after successful verification
-    return {  message: 'Email verified successfully' };
+    // Return user data for login (needed for registration flow)
+    return { 
+      user: user,
+      message: 'Email verified successfully' 
+    };
   }
 
   async forgotPassword(forgotPasswordBody: ForgotPasswordDto) {
