@@ -14,9 +14,10 @@ import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { SubscriptionsService } from '../subscriptions.service';
-import { SubscriptionStatusEnum } from '../entities/subscription.entity';
+import { Subscription, SubscriptionStatusEnum } from '../entities/subscription.entity';
 import { PaymentLogsService } from '../../payments/payment-logs.service';
 import { Listing } from '../../listings/entities/listing.entity';
+import { Payment, PaymentMethodEnum, PaymentStatusEnum } from '../../payments/entities/payment.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -34,6 +35,10 @@ export class SubscriptionWebhooksController {
     private paymentLogsService: PaymentLogsService,
     @InjectRepository(Listing)
     private listingRepository: Repository<Listing>,
+    @InjectRepository(Payment)
+    private paymentRepository: Repository<Payment>,
+    @InjectRepository(Subscription)
+    private subscriptionRepository: Repository<Subscription>,
   ) {
     const stripeSecretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
     if (stripeSecretKey) {
@@ -191,7 +196,18 @@ export class SubscriptionWebhooksController {
     const subscriptionId = invoice.subscription as string;
     if (!subscriptionId) return;
 
-    const subscription = await this.subscriptionsService.updateSubscriptionStatus(
+    // Get subscription from database by Stripe subscription ID
+    const subscription = await this.subscriptionRepository.findOne({
+      where: { subscriptionId },
+      relations: ['user'],
+    });
+    if (!subscription) {
+      this.logger.warn(`Subscription not found for Stripe subscription ID: ${subscriptionId}`);
+      return;
+    }
+
+    // Update subscription status
+    await this.subscriptionsService.updateSubscriptionStatus(
       subscriptionId,
       SubscriptionStatusEnum.ACTIVE,
       undefined,
@@ -199,6 +215,63 @@ export class SubscriptionWebhooksController {
       undefined,
       { lastPaymentSucceeded: new Date().toISOString() },
     );
+
+    // Create payment record for this invoice payment
+    const paymentIntentId = invoice.payment_intent as string;
+    const charge = invoice.charge as Stripe.Charge;
+    
+    try {
+      // Check if payment record already exists for this invoice
+      const existingPayment = paymentIntentId 
+        ? await this.paymentRepository.findOne({
+            where: { paymentIntentId },
+          })
+        : null;
+
+      if (!existingPayment) {
+        // Create new payment record for subscription renewal
+        const payment = this.paymentRepository.create({
+          userId: subscription.userId,
+          listingId: subscription.listingId,
+          paymentMethod: PaymentMethodEnum.STRIPE,
+          status: PaymentStatusEnum.SUCCEEDED,
+          amount: invoice.amount_paid / 100, // Convert from cents to dollars
+          currency: invoice.currency.toUpperCase(),
+          paymentIntentId: paymentIntentId || null,
+          paymentMethodId: charge?.payment_method as string || null,
+          listingType: subscription.listingType,
+          isFeatured: subscription.includesFeatured,
+          metadata: {
+            stripeInvoice: invoice,
+            stripeCharge: charge,
+            subscriptionId: subscription.id,
+            stripeSubscriptionId: subscriptionId,
+            billingReason: invoice.billing_reason,
+          },
+        });
+
+        await this.paymentRepository.save(payment);
+        this.logger.log(`Created payment record for subscription renewal: ${payment.id}`);
+      } else {
+        // Update existing payment to succeeded if it was pending
+        if (existingPayment.status === PaymentStatusEnum.PENDING) {
+          existingPayment.status = PaymentStatusEnum.SUCCEEDED;
+          existingPayment.metadata = {
+            ...existingPayment.metadata,
+            stripeInvoice: invoice,
+            stripeCharge: charge,
+            subscriptionId: subscription.id,
+            stripeSubscriptionId: subscriptionId,
+            billingReason: invoice.billing_reason,
+          };
+          await this.paymentRepository.save(existingPayment);
+          this.logger.log(`Updated payment record to succeeded: ${existingPayment.id}`);
+        }
+      }
+    } catch (error) {
+      this.logger.error(`Error creating payment record for invoice ${invoice.id}:`, error);
+      // Don't throw - continue processing subscription update
+    }
 
     // Handle renewal
     if (invoice.billing_reason === 'subscription_cycle') {

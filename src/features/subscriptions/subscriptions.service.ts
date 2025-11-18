@@ -16,6 +16,7 @@ import {
 } from './entities/subscription.entity';
 import { Listing, ListingTypeEnum } from '../listings/entities/listing.entity';
 import { PaymentLogsService, PaymentLogEventType } from '../payments/payment-logs.service';
+import { Payment, PaymentMethodEnum, PaymentStatusEnum } from '../payments/entities/payment.entity';
 
 // PayPal SDK doesn't have proper ES6 exports, use require
 const paypal = require('@paypal/checkout-server-sdk');
@@ -46,6 +47,7 @@ export class SubscriptionsService {
     PUPPY_LITTER_WITH_FEATURED: process.env.PAYPAL_PLAN_ID_PUPPY_LITTER_WITH_FEATURED || '',
     PUPPY_LITTER_WITHOUT_FEATURED: process.env.PAYPAL_PLAN_ID_PUPPY_LITTER_WITHOUT_FEATURED || '',
   };
+  
 
   constructor(
     private configService: ConfigService,
@@ -53,6 +55,8 @@ export class SubscriptionsService {
     private subscriptionRepository: Repository<Subscription>,
     @InjectRepository(Listing)
     private listingRepository: Repository<Listing>,
+    @InjectRepository(Payment)
+    private paymentRepository: Repository<Payment>,
     private paymentLogsService: PaymentLogsService,
   ) {
     // Initialize Stripe
@@ -410,6 +414,66 @@ export class SubscriptionsService {
       const savedSubscription = await this.subscriptionRepository.save(subscriptionEntity);
       console.log('✅ [Subscription] Subscription saved to database with ID:', savedSubscription.id);
 
+      // Create payment record for the initial subscription payment if invoice is paid
+      const invoice = subscription.latest_invoice as Stripe.Invoice;
+      if (invoice && invoice.status === 'paid' && invoice.payment_intent) {
+        try {
+          // Handle payment_intent which can be string (ID) or PaymentIntent object
+          const paymentIntentId = typeof invoice.payment_intent === 'string' 
+            ? invoice.payment_intent 
+            : invoice.payment_intent.id;
+          const charge = invoice.charge as Stripe.Charge;
+          
+          // Check if payment record already exists
+          const existingPayment = await this.paymentRepository.findOne({
+            where: { paymentIntentId },
+          });
+
+          if (!existingPayment) {
+            const payment = this.paymentRepository.create({
+              userId,
+              listingId: listingId || null,
+              paymentMethod: PaymentMethodEnum.STRIPE,
+              status: PaymentStatusEnum.SUCCEEDED,
+              amount: totalAmount,
+              currency: pricing.currency,
+              paymentIntentId: paymentIntentId,
+              paymentMethodId: charge?.payment_method as string || finalPaymentMethodId || null,
+              listingType,
+              isFeatured: includesFeatured,
+              metadata: {
+                stripeInvoice: invoice,
+                stripeCharge: charge,
+                subscriptionId: savedSubscription.id,
+                stripeSubscriptionId: subscription.id,
+                billingReason: invoice.billing_reason || 'subscription_create',
+              },
+            });
+
+            await this.paymentRepository.save(payment);
+            console.log('✅ [Subscription] Created payment record for initial subscription payment:', payment.id);
+          } else {
+            // Update existing payment if it was pending
+            if (existingPayment.status === PaymentStatusEnum.PENDING) {
+              existingPayment.status = PaymentStatusEnum.SUCCEEDED;
+              existingPayment.metadata = {
+                ...existingPayment.metadata,
+                stripeInvoice: invoice,
+                stripeCharge: charge,
+                subscriptionId: savedSubscription.id,
+                stripeSubscriptionId: subscription.id,
+                billingReason: invoice.billing_reason || 'subscription_create',
+              };
+              await this.paymentRepository.save(existingPayment);
+              console.log('✅ [Subscription] Updated payment record to succeeded:', existingPayment.id);
+            }
+          }
+        } catch (paymentError) {
+          console.error('❌ [Subscription] Error creating payment record:', paymentError);
+          // Don't throw - subscription is already created
+        }
+      }
+
       // Log subscription creation
       console.log('🔔 [Subscription] Logging subscription creation to payment logs');
       this.paymentLogsService.logSubscriptionCreated({
@@ -438,7 +502,7 @@ export class SubscriptionsService {
       });
 
       // Get client secret from invoice payment intent if available
-      const invoice = subscription.latest_invoice as Stripe.Invoice;
+      // Reuse the invoice variable declared earlier
       const paymentIntent = invoice?.payment_intent as Stripe.PaymentIntent;
       const clientSecret = paymentIntent?.client_secret;
 

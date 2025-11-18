@@ -4,13 +4,15 @@ import {
   Get,
   Body,
   Req,
+  Res,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
   UnauthorizedException,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { PaymentsService } from './payments.service';
 import {
   CreateStripeIntentDto,
@@ -124,6 +126,34 @@ export class PaymentsController {
       capturePaymentDto.orderId,
       req.user.id,
     );
+  }
+
+  @UseGuards(LoggedInGuard)
+  @Get()
+  async getUserPayments(
+    @Req() req: Request, 
+    @Res() res: Response,
+    @Query('sync') sync?: string,
+  ) {
+    if (!req.user || !req.user.id) {
+      throw new UnauthorizedException('User ID is missing. Please log in again.');
+    }
+    
+    console.log('📊 [Payments] Fetching payments for user:', req.user.id);
+    
+    // If sync=true, fetch from Stripe and merge with database
+    const payments = sync === 'true' 
+      ? await this.paymentsService.getUserPaymentsWithStripeSync(req.user.id)
+      : await this.paymentsService.getUserPayments(req.user.id);
+    
+    console.log('📊 [Payments] Found', payments.length, 'payments');
+    
+    // Set cache-control headers to prevent caching
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
+    return res.json(payments);
   }
 
   @UseGuards(LoggedInGuard)

@@ -321,11 +321,11 @@ export class UploadService {
 
   private validateFileSize(fileSize: number, fileType: FileType): void {
     const maxSizes = {
-      [FileType.IMAGE]: 15 * 1024 * 1024, // 15MB - for high-res images
-      [FileType.BREED_IMAGE]: 15 * 1024 * 1024, // 15MB - for breed images
-      [FileType.BREED_TYPE_IMAGE]: 15 * 1024 * 1024, // 15MB - for breed type images
+      [FileType.IMAGE]: 30 * 1024 * 1024, // 30MB - for high-res images
+      [FileType.BREED_IMAGE]: 30 * 1024 * 1024, // 30MB - for breed images
+      [FileType.BREED_TYPE_IMAGE]: 30 * 1024 * 1024, // 30MB - for breed type images
       [FileType.VIDEO]: 500 * 1024 * 1024, // 500MB - for longer videos
-      [FileType.DOCUMENT]: 25 * 1024 * 1024, // 25MB - for large documents
+      [FileType.DOCUMENT]: 30 * 1024 * 1024, // 30MB - for large documents
     };
 
     const maxSize = maxSizes[fileType];

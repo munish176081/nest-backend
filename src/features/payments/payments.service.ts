@@ -795,5 +795,265 @@ export class PaymentsService {
 
     return payment;
   }
+
+  async getUserPayments(userId: string): Promise<Payment[]> {
+    const payments = await this.paymentRepository.find({
+      where: { userId },
+      relations: ['listing'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return payments;
+  }
+
+  /**
+   * Fetch payments from Stripe and merge with database records
+   * This ensures we have all payments even if they weren't saved to the database
+   */
+  async getUserPaymentsWithStripeSync(userId: string): Promise<Payment[]> {
+    // Get payments from database
+    const dbPayments = await this.getUserPayments(userId);
+
+    if (!this.stripe) {
+      console.warn('Stripe not configured, returning database payments only');
+      return dbPayments;
+    }
+
+    try {
+      // Get Stripe customer ID for this user
+      const user = await this.listingRepository.manager
+        .getRepository('users')
+        .findOne({ where: { id: userId } });
+
+      if (!user?.email) {
+        return dbPayments;
+      }
+
+      // Find Stripe customer by email
+      const customers = await this.stripe.customers.list({
+        email: user.email,
+        limit: 1,
+      });
+
+      if (customers.data.length === 0) {
+        return dbPayments;
+      }
+
+      const customerId = customers.data[0].id;
+
+      // Fetch all payment intents for this customer (with pagination)
+      const allPaymentIntents: Stripe.PaymentIntent[] = [];
+      let hasMorePaymentIntents = true;
+      let paymentIntentStartingAfter: string | undefined = undefined;
+      
+      while (hasMorePaymentIntents) {
+        const paymentIntentsResponse = await this.stripe.paymentIntents.list({
+          customer: customerId,
+          limit: 100,
+          ...(paymentIntentStartingAfter && { starting_after: paymentIntentStartingAfter }),
+        });
+        
+        allPaymentIntents.push(...paymentIntentsResponse.data);
+        hasMorePaymentIntents = paymentIntentsResponse.has_more;
+        if (paymentIntentsResponse.data.length > 0) {
+          paymentIntentStartingAfter = paymentIntentsResponse.data[paymentIntentsResponse.data.length - 1].id;
+        }
+      }
+
+      // Fetch all charges for this customer (with pagination)
+      const allCharges: Stripe.Charge[] = [];
+      let hasMoreCharges = true;
+      let chargeStartingAfter: string | undefined = undefined;
+      
+      while (hasMoreCharges) {
+        const chargesResponse = await this.stripe.charges.list({
+          customer: customerId,
+          limit: 100,
+          ...(chargeStartingAfter && { starting_after: chargeStartingAfter }),
+        });
+        
+        allCharges.push(...chargesResponse.data);
+        hasMoreCharges = chargesResponse.has_more;
+        if (chargesResponse.data.length > 0) {
+          chargeStartingAfter = chargesResponse.data[chargesResponse.data.length - 1].id;
+        }
+      }
+
+      // Fetch all invoices for this customer (for subscription payments) - with pagination
+      const allInvoices: Stripe.Invoice[] = [];
+      let hasMoreInvoices = true;
+      let invoiceStartingAfter: string | undefined = undefined;
+      
+      while (hasMoreInvoices) {
+        const invoicesResponse = await this.stripe.invoices.list({
+          customer: customerId,
+          limit: 100,
+          ...(invoiceStartingAfter && { starting_after: invoiceStartingAfter }),
+        });
+        
+        allInvoices.push(...invoicesResponse.data);
+        hasMoreInvoices = invoicesResponse.has_more;
+        if (invoicesResponse.data.length > 0) {
+          invoiceStartingAfter = invoicesResponse.data[invoicesResponse.data.length - 1].id;
+        }
+      }
+
+      // Create a map of existing payments by paymentIntentId
+      const paymentMap = new Map<string, Payment>();
+      dbPayments.forEach(payment => {
+        if (payment.paymentIntentId) {
+          paymentMap.set(payment.paymentIntentId, payment);
+        }
+      });
+
+      // Process payment intents and create/update payment records
+      for (const pi of allPaymentIntents) {
+        if (pi.metadata?.userId !== userId) continue;
+
+        const existingPayment = paymentMap.get(pi.id);
+        
+        if (!existingPayment && pi.status === 'succeeded') {
+          // Create new payment record from Stripe
+          try {
+            const charge = allCharges.find(c => c.payment_intent === pi.id);
+            const payment = this.paymentRepository.create({
+              userId,
+              listingId: pi.metadata?.listingId || null,
+              paymentMethod: PaymentMethodEnum.STRIPE,
+              status: PaymentStatusEnum.SUCCEEDED,
+              amount: pi.amount / 100,
+              currency: pi.currency.toUpperCase(),
+              paymentIntentId: pi.id,
+              paymentMethodId: typeof pi.payment_method === 'string' 
+                ? pi.payment_method 
+                : pi.payment_method?.id || null,
+              listingType: pi.metadata?.listingType || null,
+              isFeatured: pi.metadata?.includesFeatured === 'true',
+              metadata: {
+                stripePaymentIntent: pi,
+                stripeCharge: charge,
+                syncedFromStripe: true,
+              },
+            });
+
+            const savedPayment = await this.paymentRepository.save(payment);
+            paymentMap.set(pi.id, savedPayment);
+            console.log('✅ [Payments] Synced payment from Stripe:', savedPayment.id);
+          } catch (error) {
+            console.error('❌ [Payments] Error syncing payment from Stripe:', error);
+          }
+        }
+      }
+
+      // Process invoices (for subscription payments that might not have payment intents)
+      // Also handle invoices without payment_intent (older payments or different payment methods)
+      for (const invoice of allInvoices) {
+        if (invoice.status !== 'paid') continue;
+
+        // Handle invoices with payment_intent
+        const paymentIntentId = invoice.payment_intent as string;
+        let existingPayment = paymentIntentId ? paymentMap.get(paymentIntentId) : null;
+        
+        // Also check by invoice charge ID if no payment intent
+        if (!existingPayment && invoice.charge) {
+          const chargeId = typeof invoice.charge === 'string' ? invoice.charge : invoice.charge.id;
+          // Check if we have a payment with this charge
+          existingPayment = Array.from(paymentMap.values()).find(p => 
+            p.metadata?.stripeCharge?.id === chargeId
+          ) || null;
+        }
+        
+        if (!existingPayment) {
+          try {
+            // Get subscription to find listing type and other details
+            const subscriptionId = invoice.subscription as string;
+            let listingType: string | null = null;
+            let includesFeatured = false;
+            let listingId: string | null = null;
+
+            if (subscriptionId) {
+              // Try to find subscription in database
+              const subscription = await this.listingRepository.manager
+                .getRepository('subscriptions')
+                .findOne({ where: { subscriptionId } });
+              
+              if (subscription) {
+                listingType = subscription.listingType;
+                includesFeatured = subscription.includesFeatured;
+                listingId = subscription.listingId;
+              } else if (invoice.metadata?.listingType) {
+                listingType = invoice.metadata.listingType;
+                includesFeatured = invoice.metadata.includesFeatured === 'true';
+              }
+            }
+
+            const charge: Stripe.Charge | undefined = invoice.charge 
+              ? (typeof invoice.charge === 'string' 
+                  ? allCharges.find(c => c.id === invoice.charge) 
+                  : invoice.charge)
+              : allCharges.find(c => 
+                  (paymentIntentId && c.payment_intent === paymentIntentId) || 
+                  c.invoice === invoice.id
+                );
+
+            // Use charge ID or invoice ID as unique identifier if no payment intent
+            const uniqueId = paymentIntentId || invoice.id;
+            
+            // Extract payment method ID from charge
+            let paymentMethodId: string | null = null;
+            if (charge) {
+              paymentMethodId = typeof charge.payment_method === 'string' 
+                ? charge.payment_method 
+                : (charge.payment_method as Stripe.PaymentMethod)?.id || null;
+            }
+            
+            const payment = this.paymentRepository.create({
+              userId,
+              listingId: listingId,
+              paymentMethod: PaymentMethodEnum.STRIPE,
+              status: PaymentStatusEnum.SUCCEEDED,
+              amount: invoice.amount_paid / 100,
+              currency: invoice.currency.toUpperCase(),
+              paymentIntentId: paymentIntentId || null,
+              paymentMethodId: paymentMethodId,
+              listingType: listingType,
+              isFeatured: includesFeatured,
+              metadata: {
+                stripeInvoice: invoice,
+                stripeCharge: charge,
+                stripeSubscriptionId: subscriptionId,
+                billingReason: invoice.billing_reason,
+                syncedFromStripe: true,
+                invoiceId: invoice.id,
+              },
+            });
+
+            const savedPayment = await this.paymentRepository.save(payment);
+            if (paymentIntentId) {
+              paymentMap.set(paymentIntentId, savedPayment);
+            } else {
+              // Use invoice ID as key if no payment intent
+              paymentMap.set(`invoice_${invoice.id}`, savedPayment);
+            }
+            console.log('✅ [Payments] Synced subscription payment from Stripe invoice:', savedPayment.id, {
+              invoiceId: invoice.id,
+              subscriptionId,
+              amount: invoice.amount_paid / 100,
+            });
+          } catch (error) {
+            console.error('❌ [Payments] Error syncing invoice payment from Stripe:', error);
+          }
+        }
+      }
+
+      // Return all payments sorted by date
+      return Array.from(paymentMap.values()).sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    } catch (error) {
+      console.error('❌ [Payments] Error syncing with Stripe:', error);
+      return dbPayments;
+    }
+  }
 }
 
