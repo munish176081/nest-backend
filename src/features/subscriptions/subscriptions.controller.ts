@@ -188,5 +188,22 @@ export class SubscriptionsController {
       updateDto.paymentMethodId,
     );
   }
+
+  @UseGuards(LoggedInGuard)
+  @Post(':id/sync-paypal')
+  @HttpCode(HttpStatus.OK)
+  async syncPayPalSubscription(
+    @Req() req: Request,
+    @Param('id') id: string,
+  ) {
+    if (!req.user || !req.user.id) {
+      throw new UnauthorizedException('User ID is missing. Please log in again.');
+    }
+
+    return await this.subscriptionsService.syncPayPalSubscriptionStatus(
+      id,
+      req.user.id,
+    );
+  }
 }
 

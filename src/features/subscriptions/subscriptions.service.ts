@@ -985,15 +985,27 @@ export class SubscriptionsService {
           throw new InternalServerErrorException('Stripe is not configured');
         }
 
-        const stripeSubscription = await this.stripe.subscriptions.update(
-          subscription.subscriptionId,
-          {
-            cancel_at_period_end: cancelAtPeriodEnd,
-          },
-        );
+        let stripeSubscription;
+        
+        if (cancelAtPeriodEnd) {
+          // Schedule cancellation at period end
+          stripeSubscription = await this.stripe.subscriptions.update(
+            subscription.subscriptionId,
+            {
+              cancel_at_period_end: true,
+            },
+          );
+          subscription.cancelAtPeriodEnd = true;
+          subscription.canceledAt = null;
+        } else {
+          // Cancel immediately
+          stripeSubscription = await this.stripe.subscriptions.cancel(
+            subscription.subscriptionId,
+          );
+          subscription.cancelAtPeriodEnd = false;
+          subscription.canceledAt = new Date();
+        }
 
-        subscription.cancelAtPeriodEnd = cancelAtPeriodEnd;
-        subscription.canceledAt = cancelAtPeriodEnd ? null : new Date();
         subscription.status = this.mapStripeStatusToSubscriptionStatus(
           stripeSubscription.status,
         );
@@ -1304,6 +1316,81 @@ export class SubscriptionsService {
     };
 
     return statusMap[stripeStatus] || SubscriptionStatusEnum.ACTIVE;
+  }
+
+  /**
+   * Map PayPal subscription status to our status enum
+   */
+  private mapPayPalStatusToSubscriptionStatus(
+    paypalStatus: string,
+  ): SubscriptionStatusEnum {
+    const statusMap: Record<string, SubscriptionStatusEnum> = {
+      APPROVAL_PENDING: SubscriptionStatusEnum.INCOMPLETE,
+      APPROVED: SubscriptionStatusEnum.ACTIVE,
+      ACTIVE: SubscriptionStatusEnum.ACTIVE,
+      SUSPENDED: SubscriptionStatusEnum.PAST_DUE,
+      CANCELLED: SubscriptionStatusEnum.CANCELLED,
+      EXPIRED: SubscriptionStatusEnum.EXPIRED,
+    };
+
+    return statusMap[paypalStatus] || SubscriptionStatusEnum.INCOMPLETE;
+  }
+
+  /**
+   * Sync PayPal subscription status from PayPal API
+   */
+  async syncPayPalSubscriptionStatus(
+    subscriptionId: string,
+    userId: string,
+  ): Promise<Subscription> {
+    const subscription = await this.getSubscriptionById(subscriptionId, userId);
+
+    if (subscription.paymentMethod !== SubscriptionPaymentMethodEnum.PAYPAL) {
+      throw new BadRequestException('Subscription is not a PayPal subscription');
+    }
+
+    try {
+      const accessToken = await this.getPayPalAccessToken();
+      const paypalSubscription = await this.paypalApiRequest(
+        accessToken,
+        'GET',
+        `/v1/billing/subscriptions/${subscription.subscriptionId}`,
+      );
+
+      const paypalStatus = paypalSubscription.status;
+      const mappedStatus = this.mapPayPalStatusToSubscriptionStatus(paypalStatus);
+
+      // Update subscription status and metadata
+      subscription.status = mappedStatus;
+      subscription.metadata = {
+        ...subscription.metadata,
+        paypalSubscription,
+      };
+
+      // Update period dates if available
+      if (paypalSubscription.start_time) {
+        subscription.currentPeriodStart = new Date(paypalSubscription.start_time);
+      }
+      if (paypalSubscription.billing_info?.next_billing_time) {
+        subscription.currentPeriodEnd = new Date(
+          paypalSubscription.billing_info.next_billing_time,
+        );
+      }
+
+      return await this.subscriptionRepository.save(subscription);
+    } catch (error: any) {
+      this.paymentLogsService.logError({
+        userId,
+        subscriptionId: subscription.id,
+        provider: 'paypal',
+        error: error instanceof Error ? error : new Error(error.message || 'Unknown error'),
+        context: { action: 'syncPayPalSubscriptionStatus' },
+      });
+
+      throw new BadRequestException(
+        error.message || 'Failed to sync PayPal subscription status',
+      );
+    }
   }
 
   /**
