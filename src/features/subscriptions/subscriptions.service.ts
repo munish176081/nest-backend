@@ -599,11 +599,13 @@ export class SubscriptionsService {
       });
       
       // For one-time payment types with featured add-on, use combined $128/month plan ID
-      const planId = isOneTimePaymentType && includesFeatured
-        ? (listingType === 'PUPPY_LITTER_LISTING'
+      const planId = listingType === 'PUPPY_LITTER_LISTING'
+        ? (includesFeatured
             ? this.paypalPlanIds.PUPPY_LITTER_WITH_FEATURED
-            : this.paypalPlanIds.PUPPY_WITH_FEATURED)
-        : this.paypalPlanIds[listingType];
+            : this.paypalPlanIds.PUPPY_LITTER_WITHOUT_FEATURED)
+        : (isOneTimePaymentType && includesFeatured
+            ? this.paypalPlanIds.PUPPY_WITH_FEATURED
+            : this.paypalPlanIds[listingType]);
 
       if (!planId) {
         const error = isOneTimePaymentType && includesFeatured
