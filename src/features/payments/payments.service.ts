@@ -6,6 +6,7 @@ import Stripe from 'stripe';
 import { Payment, PaymentStatusEnum, PaymentMethodEnum } from './entities/payment.entity';
 import { Listing } from '../listings/entities/listing.entity';
 import { PaymentLogsService } from './payment-logs.service';
+import { config } from '../../config/config';
 
 // PayPal SDK doesn't have proper ES6 exports, use require
 const paypal = require('@paypal/checkout-server-sdk');
@@ -99,7 +100,7 @@ export class PaymentsService {
 
       const paymentIntent = await this.stripe.paymentIntents.create({
         amount, // Amount is already in cents
-        currency: 'usd',
+        currency: config.defaultPaymentCurrency.toLowerCase(),
         customer: customerId, // Associate with customer so Stripe form doesn't ask for email/phone
         metadata: {
           userId,
@@ -134,7 +135,7 @@ export class PaymentsService {
         paymentMethod: PaymentMethodEnum.STRIPE,
         status: PaymentStatusEnum.PENDING,
         amount: amount / 100, // Convert from cents to dollars
-        currency: 'USD',
+        currency: config.defaultPaymentCurrency,
         paymentIntentId: paymentIntent.id,
         listingType,
         metadata: {
@@ -180,7 +181,7 @@ export class PaymentsService {
             paymentMethod: PaymentMethodEnum.STRIPE,
             status: PaymentStatusEnum.PENDING,
             amount: amount / 100,
-            currency: 'USD',
+            currency: config.defaultPaymentCurrency,
             paymentIntentId: paymentIntent.id,
             listingType,
             metadata: {
@@ -213,7 +214,7 @@ export class PaymentsService {
           paymentId: savedPayment.id,
           listingId: listingId || undefined,
           amount: amount / 100,
-          currency: 'USD',
+          currency: config.defaultPaymentCurrency,
           provider: 'stripe',
           listingType,
           metadata: { paymentIntentId: paymentIntent.id },
@@ -237,7 +238,7 @@ export class PaymentsService {
         this.paymentLogsService.logPaymentFailed({
           userId: validatedUserId,
           amount: amount / 100,
-          currency: 'USD',
+          currency: config.defaultPaymentCurrency,
           provider: 'stripe',
           error: saveError instanceof Error ? saveError : new Error(saveError.message || 'Unknown error'),
           metadata: { listingType, listingId },
@@ -257,7 +258,7 @@ export class PaymentsService {
       this.paymentLogsService.logPaymentFailed({
         userId,
         amount: amount / 100,
-        currency: 'USD',
+        currency: config.defaultPaymentCurrency,
         provider: 'stripe',
         error: error instanceof Error ? error : new Error(error.message || 'Unknown error'),
         metadata: { listingType, listingId },
@@ -513,7 +514,7 @@ export class PaymentsService {
         purchase_units: [
           {
             amount: {
-              currency_code: 'USD',
+              currency_code: config.defaultPaymentCurrency,
               value: amount.toFixed(2),
             },
             description: `Listing payment for ${listingType}`,
@@ -555,7 +556,7 @@ export class PaymentsService {
         paymentMethod: PaymentMethodEnum.PAYPAL,
         status: PaymentStatusEnum.PENDING,
         amount: parseFloat(amount.toFixed(2)),
-        currency: 'USD',
+        currency: config.defaultPaymentCurrency,
         paypalOrderId: order.result.id!,
         listingType,
         metadata: {
@@ -586,7 +587,7 @@ export class PaymentsService {
           paymentMethod: PaymentMethodEnum.PAYPAL,
           status: PaymentStatusEnum.PENDING,
           amount: parseFloat(amount.toFixed(2)),
-          currency: 'USD',
+          currency: config.defaultPaymentCurrency,
           paypalOrderId: order.result.id!,
           listingType,
           metadata: {
@@ -619,7 +620,7 @@ export class PaymentsService {
         paymentId: savedPayment.id,
         listingId: listingId || undefined,
         amount: amount,
-        currency: 'USD',
+        currency: config.defaultPaymentCurrency,
         provider: 'paypal',
         listingType,
         metadata: { paypalOrderId: order.result.id },
@@ -636,7 +637,7 @@ export class PaymentsService {
       this.paymentLogsService.logPaymentFailed({
         userId,
         amount: amount,
-        currency: 'USD',
+        currency: config.defaultPaymentCurrency,
         provider: 'paypal',
         error: error instanceof Error ? error : new Error(error.message || 'Unknown error'),
         metadata: { listingType, listingId },

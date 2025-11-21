@@ -17,6 +17,7 @@ import {
 import { Listing, ListingTypeEnum } from '../listings/entities/listing.entity';
 import { PaymentLogsService, PaymentLogEventType } from '../payments/payment-logs.service';
 import { Payment, PaymentMethodEnum, PaymentStatusEnum } from '../payments/entities/payment.entity';
+import { config } from '../../config/config';
 
 // PayPal SDK doesn't have proper ES6 exports, use require
 const paypal = require('@paypal/checkout-server-sdk');
@@ -98,7 +99,7 @@ export class SubscriptionsService {
 
     return {
       amount: pricing[listingType] || 0,
-      currency: 'USD',
+      currency: config.defaultPaymentCurrency,
     };
   }
 
@@ -153,8 +154,8 @@ export class SubscriptionsService {
       if (listingType === 'PUPPY_LITTER_LISTING') {
         // For PUPPY_LITTER_LISTING, pricing is based on whether featured is included
         pricing = includesFeatured
-          ? { amount: 128.00, currency: 'usd' }
-          : { amount: 49.00, currency: 'usd' };
+          ? { amount: 128.00, currency: config.defaultPaymentCurrency.toLowerCase() }
+          : { amount: 49.00, currency: config.defaultPaymentCurrency.toLowerCase() };
       } else if (isOneTimePaymentType && includesFeatured) {
         // For PUPPY_LISTING with featured, only charge for featured add-on subscription
         pricing = this.getSubscriptionPricing('FEATURED_ADDON');
@@ -582,8 +583,8 @@ export class SubscriptionsService {
       if (listingType === 'PUPPY_LITTER_LISTING') {
         // For PUPPY_LITTER_LISTING, pricing is based on whether featured is included
         pricing = includesFeatured
-          ? { amount: 128.00, currency: 'usd' }
-          : { amount: 49.00, currency: 'usd' };
+          ? { amount: 128.00, currency: config.defaultPaymentCurrency.toLowerCase() }
+          : { amount: 49.00, currency: config.defaultPaymentCurrency.toLowerCase() };
       } else if (isOneTimePaymentType && includesFeatured) {
         // For PUPPY_LISTING with featured, only charge for featured add-on subscription
         pricing = this.getSubscriptionPricing('FEATURED_ADDON');

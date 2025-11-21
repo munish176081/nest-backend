@@ -405,6 +405,7 @@ export class ListingsService {
       'SEMEN_LISTING': 'breeding',
       'PUPPY_LISTING': 'puppy',
       'PUPPY_LITTER_LISTING': 'puppy',
+      'LITTER_LISTING': 'puppy',
       'STUD_LISTING': 'breeding',
       'FUTURE_LISTING': 'puppy',
       'WANTED_LISTING': 'wanted',
@@ -440,6 +441,7 @@ export class ListingsService {
       'SEMEN_LISTING': 30,
       'PUPPY_LISTING': 90,
       'PUPPY_LITTER_LISTING': 90,
+      'LITTER_LISTING': 90,
       'STUD_LISTING': 30,
       'FUTURE_LISTING': 180,
       'WANTED_LISTING': 90,
@@ -506,10 +508,22 @@ export class ListingsService {
       age: calculatedAge || listing.fields?.age || '',
     };
 
+    // Determine the type based on listLitterOption for PUPPY_LITTER_LISTING
+    let displayType = listing.type;
+    if (listing.type === ListingTypeEnum.PUPPY_LITTER_LISTING && listing.fields?.listLitterOption === 'single-puppy') {
+      displayType = ListingTypeEnum.PUPPY_LISTING;
+    }
+    else if (listing.type === ListingTypeEnum.PUPPY_LITTER_LISTING && listing.fields?.listLitterOption === 'add-individually') {
+      displayType = ListingTypeEnum.LITTER_LISTING;
+    }
+    else {
+      displayType = ListingTypeEnum.LITTER_LISTING;
+    }
+
     return {
       id: listing.id,
       userId: listing.userId,
-      type: listing.type,
+      type: displayType,
       status: listing.status,
       category: listing.category,
       title: listing.title,
@@ -596,9 +610,15 @@ export class ListingsService {
       paymentIdType: typeof listing.paymentId,
     });
     
+    // Determine the type based on listLitterOption for PUPPY_LITTER_LISTING
+    let displayType = listing.type;
+    if (listing.type === ListingTypeEnum.PUPPY_LITTER_LISTING && listing.fields?.listLitterOption === 'single-puppy') {
+      displayType = ListingTypeEnum.PUPPY_LISTING;
+    }
+    
     const result = {
       id: listing.id,
-      type: listing.type,
+      type: displayType,
       status: listing.status,
       category: listing.category,
       title: listing.title,

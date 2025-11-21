@@ -547,7 +547,7 @@ export class SubscriptionWebhooksController {
 
     // Handle renewal
     const amount = parseFloat(event.resource?.amount?.total || '0');
-    const currency = event.resource?.amount?.currency || 'USD';
+    const currency = event.resource?.amount?.currency || 'AUD';
 
     await this.subscriptionsService.handleSubscriptionRenewal(
       subscriptionId,

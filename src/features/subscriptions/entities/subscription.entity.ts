@@ -67,7 +67,7 @@ export class Subscription {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   amount: number;
 
-  @Column({ type: 'varchar', length: 3, default: 'USD' })
+  @Column({ type: 'varchar', length: 3, default: 'AUD' })
   currency: string;
 
   @Column({ type: 'varchar', length: 100, nullable: true, name: 'listing_type' })

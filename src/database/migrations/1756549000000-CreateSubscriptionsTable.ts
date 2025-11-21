@@ -69,7 +69,7 @@ export class CreateSubscriptionsTable1756549000000 implements MigrationInterface
                         name: 'currency',
                         type: 'varchar',
                         length: '3',
-                        default: "'USD'",
+                        default: "'AUD'",
                     },
                     {
                         name: 'listing_type',
