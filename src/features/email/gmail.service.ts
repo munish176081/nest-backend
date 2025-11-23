@@ -115,8 +115,11 @@ export class GmailService {
       const emailMatch = senderEmail?.match(/<(.+)>/);
       const emailAddress = emailMatch ? emailMatch[1] : senderEmail;
 
-      // Format From header with display name "pups4sale"
-      const fromHeader = emailAddress ? `pups4sale <${emailAddress}>` : 'pups4sale';
+      // Get from name from configuration (defaults to 'pups4sale' if not configured)
+      const fromName = this.configService.get<string>('gmail.fromName') || 'pups4sale';
+
+      // Format From header with configurable display name
+      const fromHeader = emailAddress ? `${fromName} <${emailAddress}>` : fromName;
 
       // Build email message
       const messageParts = [

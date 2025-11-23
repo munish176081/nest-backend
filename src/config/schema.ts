@@ -88,6 +88,8 @@ export const configValidationSchema = Joi.object({
   EMAIL_GMAIL_REFRESH_TOKEN: Joi.string().optional(),
   EMAIL_GMAIL_ACCESS_TOKEN: Joi.string().optional(),
   EMAIL_GMAIL_EXPIRY_DATE: Joi.number().optional(),
+  // From name for Gmail emails (display name shown in recipient's inbox)
+  EMAIL_GMAIL_FROM_NAME: Joi.string().optional().default('pups4sale'),
 
   SESSION_SECRET: Joi.string().required(),
   COOKIE_DOMAIN: Joi.string().optional(),
@@ -136,6 +138,7 @@ export const configConfiguration = () => {
       accessToken: process.env.EMAIL_GMAIL_ACCESS_TOKEN,
       refreshToken: process.env.EMAIL_GMAIL_REFRESH_TOKEN,
       expiryDate: process.env.EMAIL_GMAIL_EXPIRY_DATE ? parseInt(process.env.EMAIL_GMAIL_EXPIRY_DATE, 10) : undefined,
+      fromName: process.env.EMAIL_GMAIL_FROM_NAME || 'pups4sale',
     },
     email: {
       serviceType: process.env.EMAIL_SERVICE_TYPE,

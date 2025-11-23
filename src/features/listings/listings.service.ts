@@ -421,9 +421,18 @@ export class ListingsService {
     // Process fields to add calculated values
     const processedFields = { ...fields };
     
-    // Calculate age from dateOfBirth if present
-    if (processedFields.dateOfBirth) {
+    // For STUD_LISTING, age is provided directly as a number, not calculated from dateOfBirth
+    // For other listing types, calculate age from dateOfBirth if present
+    if (type !== ListingTypeEnum.STUD_LISTING && processedFields.dateOfBirth) {
       processedFields.age = calculateAge(processedFields.dateOfBirth);
+    }
+    // For STUD_LISTING, ensure age is stored as a string for display consistency
+    else if (type === ListingTypeEnum.STUD_LISTING && processedFields.age !== undefined) {
+      // Age is already provided as a number, format it for display
+      const ageValue = typeof processedFields.age === 'number' 
+        ? processedFields.age 
+        : parseInt(processedFields.age);
+      processedFields.age = isNaN(ageValue) ? 'Unknown Age' : `${ageValue} year${ageValue !== 1 ? 's' : ''}`;
     }
     
     return processedFields;
@@ -468,9 +477,18 @@ export class ListingsService {
   }
 
   private async transformToListingResponse(listing: Listing): Promise<ListingResponseDto> {
-    // Calculate age from dateOfBirth if present in fields
+    // Calculate age from dateOfBirth if present in fields (for non-stud listings)
+    // For STUD_LISTING, age is provided directly as a number
     let calculatedAge = '';
-    if (listing.fields?.dateOfBirth) {
+    if (listing.type === ListingTypeEnum.STUD_LISTING) {
+      // For stud listings, use age field directly
+      if (listing.fields?.age !== undefined) {
+        const ageValue = typeof listing.fields.age === 'number' 
+          ? listing.fields.age 
+          : parseInt(listing.fields.age);
+        calculatedAge = isNaN(ageValue) ? 'Unknown Age' : `${ageValue} year${ageValue !== 1 ? 's' : ''}`;
+      }
+    } else if (listing.fields?.dateOfBirth) {
       calculatedAge = calculateAge(listing.fields.dateOfBirth);
     }
 
@@ -559,9 +577,18 @@ export class ListingsService {
   }
 
   private transformToListingSummary(listing: Listing): ListingSummaryDto {
-    // Calculate age from dateOfBirth if present in fields
+    // Calculate age from dateOfBirth if present in fields (for non-stud listings)
+    // For STUD_LISTING, age is provided directly as a number
     let calculatedAge = '';
-    if (listing.fields?.dateOfBirth) {
+    if (listing.type === ListingTypeEnum.STUD_LISTING) {
+      // For stud listings, use age field directly
+      if (listing.fields?.age !== undefined) {
+        const ageValue = typeof listing.fields.age === 'number' 
+          ? listing.fields.age 
+          : parseInt(listing.fields.age);
+        calculatedAge = isNaN(ageValue) ? 'Unknown Age' : `${ageValue} year${ageValue !== 1 ? 's' : ''}`;
+      }
+    } else if (listing.fields?.dateOfBirth) {
       calculatedAge = calculateAge(listing.fields.dateOfBirth);
     }
     

@@ -171,6 +171,7 @@ export class SubscriptionsService {
       });
       
       // Get or create Stripe customer
+      // IMPORTANT: Check existing customer's currency to avoid currency mismatch errors
       let customerId: string;
       const existingSubscription = await this.subscriptionRepository.findOne({
         where: { userId, paymentMethod: SubscriptionPaymentMethodEnum.STRIPE },
@@ -1021,14 +1022,56 @@ export class SubscriptionsService {
           throw new InternalServerErrorException('PayPal is not configured');
         }
 
-        const request = new paypal.subscriptions.SubscriptionsCancelRequest(
-          subscription.subscriptionId,
-        );
-        request.requestBody({
-          reason: cancelAtPeriodEnd ? 'User requested cancellation at period end' : 'User requested immediate cancellation',
-        });
+        // PayPal SDK structure: Use the correct path for subscription cancellation
+        // The PayPal SDK uses a different structure - check if subscriptions module exists
+        if (!paypal.subscriptions || !paypal.subscriptions.SubscriptionsCancelRequest) {
+          // Alternative: Use PayPal REST API directly via HTTP
+          const cancelUrl = `https://api${this.configService.get<string>('PAYPAL_ENVIRONMENT') === 'production' ? '' : '.sandbox'}.paypal.com/v1/billing/subscriptions/${subscription.subscriptionId}/cancel`;
+          
+          const https = require('https');
+          const auth = Buffer.from(
+            `${this.configService.get<string>('PAYPAL_CLIENT_ID')}:${this.configService.get<string>('PAYPAL_SECRET')}`
+          ).toString('base64');
 
-        await this.paypalClient.execute(request);
+          await new Promise((resolve, reject) => {
+            const postData = JSON.stringify({
+              reason: cancelAtPeriodEnd ? 'User requested cancellation at period end' : 'User requested immediate cancellation',
+            });
+
+            const options = {
+              hostname: cancelUrl.includes('sandbox') ? 'api.sandbox.paypal.com' : 'api.paypal.com',
+              path: `/v1/billing/subscriptions/${subscription.subscriptionId}/cancel`,
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Basic ${auth}`,
+                'Content-Length': Buffer.byteLength(postData),
+              },
+            };
+
+            const req = https.request(options, (res: any) => {
+              if (res.statusCode >= 200 && res.statusCode < 300) {
+                resolve(res);
+              } else {
+                reject(new Error(`PayPal API error: ${res.statusCode}`));
+              }
+            });
+
+            req.on('error', reject);
+            req.write(postData);
+            req.end();
+          });
+        } else {
+          // Use PayPal SDK if available
+          const request = new paypal.subscriptions.SubscriptionsCancelRequest(
+            subscription.subscriptionId,
+          );
+          request.requestBody({
+            reason: cancelAtPeriodEnd ? 'User requested cancellation at period end' : 'User requested immediate cancellation',
+          });
+
+          await this.paypalClient.execute(request);
+        }
 
         subscription.cancelAtPeriodEnd = cancelAtPeriodEnd;
         subscription.canceledAt = cancelAtPeriodEnd ? null : new Date();
