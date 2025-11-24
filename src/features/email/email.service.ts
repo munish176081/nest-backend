@@ -68,7 +68,7 @@ export class EmailService {
     const subjectMap: Record<string, string> = {
       'welcome': 'Verify Your Email Address',
       'password-reset': 'Reset Your Password',
-      'welcome-1': 'Verify Your Email - OTP Code',
+      'welcome-1': 'Complete Your Registration',
       'welcome-3': 'Reset Your Password - OTP Code',
       'welcome-4': 'New Contact Form Submission',
       'welcome-5': 'Thank You for Your Enquiry',

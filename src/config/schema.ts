@@ -113,6 +113,9 @@ export const configValidationSchema = Joi.object({
   PAYPAL_CLIENT_ID: Joi.string().optional(),
   PAYPAL_SECRET: Joi.string().optional(),
   PAYPAL_ENVIRONMENT: Joi.string().valid('sandbox', 'production').default('sandbox'),
+
+  // reCAPTCHA Configuration
+  RECAPTCHA_SECRET_KEY: Joi.string().optional(),
 });
 
 export const configConfiguration = () => {
@@ -187,6 +190,9 @@ export const configConfiguration = () => {
       clientId: process.env.PAYPAL_CLIENT_ID,
       secret: process.env.PAYPAL_SECRET,
       environment: process.env.PAYPAL_ENVIRONMENT || 'sandbox',
+    },
+    recaptcha: {
+      secretKey: process.env.RECAPTCHA_SECRET_KEY,
     },
     cloudProvider: process.env.CLOUD_PROVIDER,
     r2: {

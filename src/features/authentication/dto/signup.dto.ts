@@ -1,4 +1,4 @@
-import { IsAlphanumeric, IsEmail, IsString, Matches } from 'class-validator';
+import { IsAlphanumeric, IsEmail, IsOptional, IsString, Matches } from 'class-validator';
 
 export const passwordRegex =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
@@ -20,4 +20,8 @@ export class SignupDto {
 
   @IsString()
   confirmPassword: string;
+
+  @IsString()
+  @IsOptional()
+  recaptchaToken?: string;
 }
