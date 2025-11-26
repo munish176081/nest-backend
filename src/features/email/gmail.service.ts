@@ -121,9 +121,14 @@ export class GmailService {
       // Format From header with configurable display name
       const fromHeader = emailAddress ? `${fromName} <${emailAddress}>` : fromName;
 
+      const FromName = "Pups4Sale";
+      const FromEmail = "admin@pups4sale.com.au"; 
+
+      const fromHeaderPart = `${FromName} <${FromEmail}>`;
+
       // Build email message
       const messageParts = [
-        `From: ${fromHeader}`,
+        `From: ${fromHeaderPart}`,
         `To: ${to}`,
         `Subject: ${subject}`,
         'Content-Type: text/html; charset=utf-8',
