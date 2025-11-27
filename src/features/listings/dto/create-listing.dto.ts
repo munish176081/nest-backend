@@ -1,6 +1,6 @@
 import { IsString, IsEnum, IsOptional, IsNumber, IsArray, IsBoolean, IsDateString, ValidateNested, IsObject } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ListingTypeEnum, ListingCategoryEnum, ListingAvailabilityEnum } from '../entities/listing.entity';
+import { ListingTypeEnum, ListingCategoryEnum, ListingAvailabilityEnum, ListingStatusEnum } from '../entities/listing.entity';
 
 export class ContactInfoDto {
   @IsOptional()
@@ -171,4 +171,8 @@ export class CreateListingDto {
   @IsOptional()
   @IsString()
   subscriptionId?: string;
+
+  @IsOptional()
+  @IsEnum(ListingStatusEnum)
+  status?: ListingStatusEnum;
 } 

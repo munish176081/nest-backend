@@ -182,4 +182,27 @@ export class ListingsController {
   async incrementContactCount(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.listingsService.incrementContactCount(id);
   }
+
+  // Reactivate expired listing
+  @UseGuards(LoggedInGuard)
+  @Post(':id/reactivate')
+  @Serialize(ListingResponseDto)
+  async reactivateListing(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { subscriptionId?: string; paymentId?: string },
+  ): Promise<ListingResponseDto> {
+    return await this.listingsService.reactivateListing(req.user.id, id, body.subscriptionId || body.paymentId);
+  }
+
+  // Sync listing subscription status from Stripe
+  @UseGuards(LoggedInGuard)
+  @Post(':id/sync-subscription')
+  @Serialize(ListingResponseDto)
+  async syncListingSubscription(
+    @Req() req: Request,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ListingResponseDto> {
+    return await this.listingsService.syncListingSubscriptionStatus(req.user.id, id);
+  }
 } 

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SubscriptionsController } from './subscriptions.controller';
 import { SubscriptionsService } from './subscriptions.service';
@@ -15,7 +15,7 @@ import { LoggedInGuard } from '../../middleware/LoggedInGuard';
   imports: [
     TypeOrmModule.forFeature([Subscription, Listing, Payment]),
     AuthModule,
-    UsersModule,
+    forwardRef(() => UsersModule),
   ],
   controllers: [SubscriptionsController, SubscriptionWebhooksController],
   providers: [SubscriptionsService, PaymentLogsService, LoggedInGuard],

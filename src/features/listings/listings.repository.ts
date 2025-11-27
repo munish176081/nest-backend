@@ -4,12 +4,15 @@ import { Repository, SelectQueryBuilder, ILike, Between, In, IsNull, Not } from 
 import { Listing, ListingTypeEnum, ListingCategoryEnum, ListingStatusEnum } from './entities/listing.entity';
 import { QueryListingDto } from './dto/query-listing.dto';
 import { SearchListingDto } from './dto/query-listing.dto';
+import { Subscription, SubscriptionStatusEnum } from '../subscriptions/entities/subscription.entity';
 
 @Injectable()
 export class ListingsRepository {
   constructor(
     @InjectRepository(Listing)
     private readonly listingRepository: Repository<Listing>,
+    @InjectRepository(Subscription)
+    private readonly subscriptionRepository: Repository<Subscription>,
   ) {}
 
   async create(listingData: Partial<Listing>): Promise<Listing> {
@@ -103,6 +106,7 @@ export class ListingsRepository {
       .leftJoinAndSelect('listing.user', 'user')
       .leftJoinAndSelect('listing.breedRelation', 'breed')
       .where('listing.status = :status', { status: ListingStatusEnum.ACTIVE })
+      .andWhere('listing.isActive = :isActive', { isActive: true })
       .andWhere('(listing.expiresAt IS NULL OR listing.expiresAt > NOW())')
       .andWhere(
         '(listing.title ILIKE :query OR listing.description ILIKE :query OR listing.breed ILIKE :query OR listing.location ILIKE :query)',
@@ -211,9 +215,17 @@ export class ListingsRepository {
     return await this.listingRepository.createQueryBuilder('listing')
       .leftJoinAndSelect('listing.user', 'user')
       .leftJoinAndSelect('listing.breedRelation', 'breed')
-      .where('listing.isFeatured = :isFeatured', { isFeatured: true })
+      .innerJoin(
+        'subscriptions',
+        'subscription',
+        'subscription.listing_id = listing.id'
+      )
+      .where('subscription.includes_featured = :includesFeatured', { includesFeatured: true })
+      .andWhere('subscription.status = :subscriptionStatus', { subscriptionStatus: SubscriptionStatusEnum.ACTIVE })
+      .andWhere('subscription.current_period_end > NOW()')
       .andWhere('listing.status = :status', { status: ListingStatusEnum.ACTIVE })
       .andWhere('listing.isActive = :isActive', { isActive: true })
+      .distinct(true)
       .orderBy('listing.createdAt', 'DESC')
       .take(limit)
       .getMany();
@@ -282,6 +294,11 @@ export class ListingsRepository {
     } else {
       // Default to active listings if no specific status
       queryBuilder.andWhere('listing.status = :status', { status: ListingStatusEnum.ACTIVE });
+    }
+
+    // Filter out inactive/expired listings from public queries (unless userId is specified, which means it's a private query)
+    if (!queryDto.userId) {
+      queryBuilder.andWhere('listing.isActive = :isActive', { isActive: true });
     }
 
     if (!queryDto.includeExpired) {

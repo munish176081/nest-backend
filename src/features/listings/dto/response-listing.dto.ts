@@ -188,6 +188,12 @@ export class ListingSummaryDto {
 
   @Expose()
   paymentId?: string | null;
+
+  @Expose()
+  expiresAt?: Date;
+
+  @Expose()
+  isActive?: boolean;
 }
 
 export class PaginatedListingsResponseDto {

@@ -14,7 +14,7 @@ import {
   SubscriptionStatusEnum,
   SubscriptionPaymentMethodEnum,
 } from './entities/subscription.entity';
-import { Listing, ListingTypeEnum } from '../listings/entities/listing.entity';
+import { Listing, ListingTypeEnum, ListingStatusEnum } from '../listings/entities/listing.entity';
 import { PaymentLogsService, PaymentLogEventType } from '../payments/payment-logs.service';
 import { Payment, PaymentMethodEnum, PaymentStatusEnum } from '../payments/entities/payment.entity';
 import { config } from '../../config/config';
@@ -890,6 +890,48 @@ export class SubscriptionsService {
             };
 
             await this.subscriptionRepository.save(existingSub);
+
+            // If subscription is canceled, deactivate linked listing
+            const mappedStatus = this.mapStripeStatusToSubscriptionStatus(stripeSub.status);
+            const inactiveStatuses = [
+              SubscriptionStatusEnum.CANCELLED,
+              SubscriptionStatusEnum.PAST_DUE,
+              SubscriptionStatusEnum.UNPAID,
+              SubscriptionStatusEnum.INCOMPLETE_EXPIRED,
+            ];
+
+            if (existingSub.listingId && (inactiveStatuses.includes(mappedStatus) || stripeSub.status === 'canceled')) {
+              try {
+                await this.listingRepository
+                  .createQueryBuilder()
+                  .update(Listing)
+                  .set({ 
+                    isActive: false,
+                    status: ListingStatusEnum.EXPIRED,
+                  })
+                  .where('id = :listingId', { listingId: existingSub.listingId })
+                  .execute();
+                console.log(`[Sync] Deactivated listing ${existingSub.listingId} due to canceled subscription ${stripeSub.id}`);
+              } catch (error) {
+                console.error(`[Sync] Failed to deactivate listing ${existingSub.listingId}:`, error);
+              }
+            } else if (existingSub.listingId && mappedStatus === SubscriptionStatusEnum.ACTIVE) {
+              // If subscription is active, ensure listing is also active
+              try {
+                await this.listingRepository
+                  .createQueryBuilder()
+                  .update(Listing)
+                  .set({ 
+                    isActive: true,
+                    status: ListingStatusEnum.ACTIVE,
+                    expiresAt: new Date(stripeSub.current_period_end * 1000),
+                  })
+                  .where('id = :listingId', { listingId: existingSub.listingId })
+                  .execute();
+              } catch (error) {
+                console.error(`[Sync] Failed to update listing ${existingSub.listingId}:`, error);
+              }
+            }
           } else {
             // Create new subscription if it doesn't exist and has userId in metadata
             if (stripeSub.metadata?.userId === userId) {
@@ -1525,6 +1567,94 @@ export class SubscriptionsService {
       }
       req.end();
     });
+  }
+
+  /**
+   * Confirm subscription payment and sync status from Stripe
+   * This is called after payment is confirmed on the frontend
+   */
+  async confirmSubscriptionPayment(
+    subscriptionId: string, // Database subscription ID
+    userId: string,
+  ): Promise<Subscription> {
+    console.log('🔔 [Subscription] Confirming payment for subscription:', { subscriptionId, userId });
+
+    // Find subscription by database ID
+    const subscription = await this.subscriptionRepository.findOne({
+      where: { id: subscriptionId, userId },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException(`Subscription not found: ${subscriptionId}`);
+    }
+
+    if (!this.stripe) {
+      throw new InternalServerErrorException('Stripe is not configured');
+    }
+
+    try {
+      // Retrieve the latest subscription status from Stripe
+      const stripeSubscription = await this.stripe.subscriptions.retrieve(
+        subscription.subscriptionId,
+      );
+
+      console.log('✅ [Subscription] Retrieved Stripe subscription:', {
+        stripeId: stripeSubscription.id,
+        status: stripeSubscription.status,
+        latestInvoice: stripeSubscription.latest_invoice,
+      });
+
+      // Update subscription status based on Stripe
+      subscription.status = this.mapStripeStatusToSubscriptionStatus(stripeSubscription.status);
+      subscription.currentPeriodStart = new Date(stripeSubscription.current_period_start * 1000);
+      subscription.currentPeriodEnd = new Date(stripeSubscription.current_period_end * 1000);
+      subscription.cancelAtPeriodEnd = stripeSubscription.cancel_at_period_end;
+      subscription.canceledAt = stripeSubscription.canceled_at
+        ? new Date(stripeSubscription.canceled_at * 1000)
+        : null;
+      subscription.metadata = {
+        ...subscription.metadata,
+        stripeSubscription,
+        lastSyncedAt: new Date().toISOString(),
+      };
+
+      const updatedSubscription = await this.subscriptionRepository.save(subscription);
+      console.log('✅ [Subscription] Subscription status updated:', {
+        databaseId: updatedSubscription.id,
+        status: updatedSubscription.status,
+        listingId: updatedSubscription.listingId,
+      });
+
+      // If subscription is now active and linked to a listing, activate the listing
+      if (
+        updatedSubscription.status === SubscriptionStatusEnum.ACTIVE &&
+        updatedSubscription.listingId
+      ) {
+        try {
+          await this.listingRepository
+            .createQueryBuilder()
+            .update(Listing)
+            .set({
+              isActive: true,
+              status: ListingStatusEnum.ACTIVE,
+              expiresAt: updatedSubscription.currentPeriodEnd,
+            })
+            .where('id = :listingId', { listingId: updatedSubscription.listingId })
+            .execute();
+          console.log('✅ [Subscription] Activated listing:', updatedSubscription.listingId);
+        } catch (error) {
+          console.error('❌ [Subscription] Error activating listing:', error);
+          // Don't throw - subscription is already updated
+        }
+      }
+
+      return updatedSubscription;
+    } catch (error: any) {
+      console.error('❌ [Subscription] Error confirming subscription payment:', error);
+      throw new InternalServerErrorException(
+        `Failed to confirm subscription payment: ${error.message}`,
+      );
+    }
   }
 }
 

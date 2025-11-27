@@ -110,6 +110,20 @@ export class SubscriptionsController {
   }
 
   @UseGuards(LoggedInGuard)
+  @Post(':id/confirm-payment')
+  @HttpCode(HttpStatus.OK)
+  async confirmSubscriptionPayment(
+    @Req() req: Request,
+    @Param('id') id: string,
+  ) {
+    if (!req.user || !req.user.id) {
+      throw new UnauthorizedException('User ID is missing. Please log in again.');
+    }
+
+    return await this.subscriptionsService.confirmSubscriptionPayment(id, req.user.id);
+  }
+
+  @UseGuards(LoggedInGuard)
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
   async cancelSubscription(

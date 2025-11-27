@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ListingsRepository } from './listings.repository';
@@ -11,7 +12,7 @@ import { calculateAge } from '../../helpers/date';
 import { UsersService } from '../accounts/users.service';
 import { ActivityLogsService } from '../accounts/activity-logs.service';
 import { Payment } from '../payments/entities/payment.entity';
-import { Subscription } from '../subscriptions/entities/subscription.entity';
+import { Subscription, SubscriptionStatusEnum } from '../subscriptions/entities/subscription.entity';
 
 @Injectable()
 export class ListingsService {
@@ -21,6 +22,8 @@ export class ListingsService {
     private readonly usersService: UsersService,
     @Inject(forwardRef(() => ActivityLogsService))
     private readonly activityLogsService: ActivityLogsService,
+    @Inject(forwardRef(() => SubscriptionsService))
+    private readonly subscriptionsService: SubscriptionsService,
     @InjectRepository(Payment)
     private readonly paymentRepository: Repository<Payment>,
     @InjectRepository(Subscription)
@@ -84,8 +87,8 @@ export class ListingsService {
       location: createListingDto.location,
       expiresAt,
       startedOrRenewedAt: new Date(),
-      status: ListingStatusEnum.ACTIVE,
-      isActive: true,
+      status: createListingDto.status || ListingStatusEnum.ACTIVE,
+      isActive: createListingDto.status === ListingStatusEnum.DRAFT ? false : true,
       seoData: createListingDto.seoData,
       motherInfo: createListingDto.motherInfo,
       fatherInfo: createListingDto.fatherInfo,
@@ -117,19 +120,69 @@ export class ListingsService {
     if (listing.subscriptionId) {
       try {
         console.log('🔗 Linking subscription to listing:', { subscriptionId: listing.subscriptionId, listingId: listing.id });
-        const subscription = await this.subscriptionRepository.findOne({
+        
+        // Try to find subscription by database ID first (in case frontend passes database ID)
+        let subscription = await this.subscriptionRepository.findOne({
           where: { id: listing.subscriptionId },
         });
         
+        // If not found by database ID, try by provider subscription ID (Stripe or PayPal)
+        if (!subscription) {
+          console.log('🔍 Subscription not found by database ID, trying provider subscription ID...');
+          subscription = await this.subscriptionRepository.findOne({
+            where: { subscriptionId: listing.subscriptionId },
+          });
+        }
+        
         if (subscription) {
+          console.log('✅ Found subscription:', {
+            databaseId: subscription.id,
+            stripeSubscriptionId: subscription.subscriptionId,
+            currentListingId: subscription.listingId,
+            status: subscription.status,
+          });
+          
           subscription.listingId = listing.id;
           // Update expiration based on subscription period
           if (subscription.currentPeriodEnd) {
             listing.expiresAt = subscription.currentPeriodEnd;
             await this.listingsRepository.update(listing.id, { expiresAt: subscription.currentPeriodEnd });
+            console.log('📅 Updated listing expiration to:', subscription.currentPeriodEnd);
           }
           await this.subscriptionRepository.save(subscription);
           console.log('✅ Subscription linked to listing successfully');
+          
+          // Update the listing's subscriptionId field to store the database subscription ID (UUID)
+          // Ensure it's set to the database subscription ID, not the Stripe subscription ID
+          if (listing.subscriptionId !== subscription.id) {
+            await this.listingsRepository.update(listing.id, { 
+              subscriptionId: subscription.id 
+            });
+            console.log('✅ Updated listing.subscriptionId to database subscription ID:', subscription.id);
+          }
+
+          // Update any payment records associated with this subscription that don't have a listingId yet
+          try {
+            const updatedPayments = await this.paymentRepository
+              .createQueryBuilder()
+              .update(Payment)
+              .set({ listingId: listing.id })
+              .where('listingId IS NULL')
+              .andWhere(
+                `(metadata->>'subscriptionId' = :subscriptionId OR metadata->>'paypalSubscriptionId' = :providerSubscriptionId)`,
+                { subscriptionId: subscription.id, providerSubscriptionId: subscription.subscriptionId }
+              )
+              .execute();
+            
+            if (updatedPayments.affected && updatedPayments.affected > 0) {
+              console.log(`✅ Updated ${updatedPayments.affected} payment record(s) with listing ID:`, listing.id);
+            }
+          } catch (paymentUpdateError) {
+            console.error('❌ Error updating payment records with listing ID:', paymentUpdateError);
+            // Don't throw error - listing is already created and subscription is linked
+          }
+        } else {
+          console.warn('⚠️ Subscription not found with subscriptionId (tried both database ID and provider subscription ID):', listing.subscriptionId);
         }
       } catch (error) {
         console.error('❌ Error linking subscription to listing:', error);
@@ -216,9 +269,63 @@ export class ListingsService {
       motherInfo: updateListingDto.motherInfo,
       fatherInfo: updateListingDto.fatherInfo,
       studInfo: updateListingDto.studInfo,
+      subscriptionId: updateListingDto.subscriptionId,
     };
 
     const updatedListing = await this.listingsRepository.update(listingId, updateData);
+    
+    // If subscriptionId was provided, link the subscription to the listing
+    if (updateListingDto.subscriptionId) {
+      try {
+        console.log('🔗 Linking subscription to listing (update):', { subscriptionId: updateListingDto.subscriptionId, listingId });
+        
+        // Try to find subscription by database ID first (in case frontend passes database ID)
+        let subscription = await this.subscriptionRepository.findOne({
+          where: { id: updateListingDto.subscriptionId },
+        });
+        
+        // If not found by database ID, try by Stripe subscription ID
+        if (!subscription) {
+          console.log('🔍 Subscription not found by database ID, trying Stripe subscription ID...');
+          subscription = await this.subscriptionRepository.findOne({
+            where: { subscriptionId: updateListingDto.subscriptionId },
+          });
+        }
+        
+        if (subscription) {
+          console.log('✅ Found subscription:', {
+            databaseId: subscription.id,
+            stripeSubscriptionId: subscription.subscriptionId,
+            currentListingId: subscription.listingId,
+            status: subscription.status,
+          });
+          
+          subscription.listingId = listingId;
+          // Update expiration based on subscription period
+          if (subscription.currentPeriodEnd) {
+            await this.listingsRepository.update(listingId, { expiresAt: subscription.currentPeriodEnd });
+            console.log('📅 Updated listing expiration to:', subscription.currentPeriodEnd);
+          }
+          await this.subscriptionRepository.save(subscription);
+          console.log('✅ Subscription linked to listing successfully (update)');
+          
+          // Update the listing's subscriptionId field to store the database subscription ID (UUID)
+          // The frontend already passed the database subscription ID, but ensure it's set correctly
+          if (subscription.id !== updateListingDto.subscriptionId) {
+            await this.listingsRepository.update(listingId, { 
+              subscriptionId: subscription.id 
+            });
+            console.log('✅ Updated listing.subscriptionId to database subscription ID:', subscription.id);
+          }
+        } else {
+          console.warn('⚠️ Subscription not found with subscriptionId (tried both database ID and Stripe ID):', updateListingDto.subscriptionId);
+        }
+      } catch (error) {
+        console.error('❌ Error linking subscription to listing (update):', error);
+        // Don't throw error - listing is already updated, just log the issue
+      }
+    }
+    
     return this.transformToListingResponse(updatedListing);
   }
 
@@ -669,9 +776,130 @@ export class ListingsService {
       age: calculatedAge || listing.fields?.age || '',
       paymentId: listing.paymentId || null,
       subscriptionId: listing.subscriptionId || null,
+      expiresAt: listing.expiresAt,
+      isActive: listing.isActive,
     };
     
     return result;
+  }
+
+  /**
+   * Sync listing subscription status from Stripe and update listing accordingly
+   */
+  async syncListingSubscriptionStatus(userId: string, listingId: string): Promise<ListingResponseDto> {
+    const listing = await this.listingsRepository.findById(listingId);
+
+    if (!listing) {
+      throw new NotFoundException('Listing not found');
+    }
+
+    if (listing.userId !== userId) {
+      throw new ForbiddenException('You can only sync your own listings');
+    }
+
+    // If listing has a subscription, sync it from Stripe
+    if (listing.subscriptionId) {
+      const subscription = await this.subscriptionRepository.findOne({
+        where: { id: listing.subscriptionId },
+      });
+
+      if (subscription && subscription.paymentMethod === 'stripe') {
+        // Sync subscription from Stripe
+        await this.subscriptionsService.syncSubscriptionsFromStripe(userId);
+
+        // Reload subscription to get updated status
+        const updatedSubscription = await this.subscriptionRepository.findOne({
+          where: { id: listing.subscriptionId },
+        });
+
+        if (updatedSubscription) {
+          const inactiveStatuses = [
+            SubscriptionStatusEnum.CANCELLED,
+            SubscriptionStatusEnum.PAST_DUE,
+            SubscriptionStatusEnum.UNPAID,
+            SubscriptionStatusEnum.INCOMPLETE_EXPIRED,
+          ];
+
+          // If subscription is canceled/inactive, deactivate listing
+          if (inactiveStatuses.includes(updatedSubscription.status)) {
+            const updateData: Partial<Listing> = {
+              isActive: false,
+              status: ListingStatusEnum.EXPIRED,
+            };
+            await this.listingsRepository.update(listingId, updateData);
+          } else if (updatedSubscription.status === SubscriptionStatusEnum.ACTIVE) {
+            // If subscription is active, ensure listing is active
+            const updateData: Partial<Listing> = {
+              isActive: true,
+              status: ListingStatusEnum.ACTIVE,
+              expiresAt: updatedSubscription.currentPeriodEnd,
+            };
+            await this.listingsRepository.update(listingId, updateData);
+          }
+        }
+      }
+    }
+
+    const updatedListing = await this.listingsRepository.findById(listingId);
+    return this.transformToListingResponse(updatedListing);
+  }
+
+  /**
+   * Reactivate an expired/inactive listing by linking a new subscription
+   */
+  async reactivateListing(userId: string, listingId: string, subscriptionId?: string): Promise<ListingResponseDto> {
+    const listing = await this.listingsRepository.findById(listingId);
+
+    if (!listing) {
+      throw new NotFoundException('Listing not found');
+    }
+
+    if (listing.userId !== userId) {
+      throw new ForbiddenException('You can only reactivate your own listings');
+    }
+
+    // Check if listing is expired or inactive
+    if (listing.isActive && listing.status === ListingStatusEnum.ACTIVE) {
+      // throw new BadRequestException('Listing is already active');
+      // commenting for now
+    }
+
+    // If subscriptionId is provided, link it to the listing
+    if (subscriptionId) {
+      const subscription = await this.subscriptionRepository.findOne({
+        where: { id: subscriptionId },
+      });
+
+      if (!subscription) {
+        throw new NotFoundException('Subscription not found');
+      }
+
+      if (subscription.userId !== userId) {
+        throw new ForbiddenException('Subscription does not belong to you');
+      }
+
+      // Link subscription to listing
+      subscription.listingId = listingId;
+      await this.subscriptionRepository.save(subscription);
+
+      // Update listing with subscription info
+      const updateData: Partial<Listing> = {
+        subscriptionId: subscription.id,
+        isActive: true,
+        status: ListingStatusEnum.ACTIVE,
+        startedOrRenewedAt: new Date(),
+      };
+
+      // Update expiration based on subscription period
+      if (subscription.currentPeriodEnd) {
+        updateData.expiresAt = subscription.currentPeriodEnd;
+      }
+
+      const updatedListing = await this.listingsRepository.update(listingId, updateData);
+      return this.transformToListingResponse(updatedListing);
+    }
+
+    throw new BadRequestException('Subscription ID is required for reactivation');
   }
 
   /**
