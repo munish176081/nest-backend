@@ -46,8 +46,9 @@ export class BreedsService {
       queryBuilder.andWhere('breed.size = :size', { size });
     }
 
-    // Apply sorting
+    // Apply sorting - add secondary sort by name for deterministic ordering
     queryBuilder.orderBy(`breed.${sortBy}`, sortOrder);
+    queryBuilder.addOrderBy('breed.name', 'ASC');
 
     // Apply pagination
     const skip = (page - 1) * limit;
@@ -154,7 +155,13 @@ export class BreedsService {
       throw new BadRequestException('Slug must contain only lowercase letters, numbers, and hyphens');
     }
 
-    const breed = this.breedRepository.create(createBreedDto);
+    // Normalize imageUrl - convert empty string to null
+    const normalizedDto = {
+      ...createBreedDto,
+      imageUrl: createBreedDto.imageUrl?.trim() || null,
+    };
+
+    const breed = this.breedRepository.create(normalizedDto);
     return this.breedRepository.save(breed);
   }
 
@@ -186,7 +193,15 @@ export class BreedsService {
       }
     }
 
-    await this.breedRepository.update(id, updateBreedDto);
+    // Normalize imageUrl - convert empty string to null
+    const normalizedDto = {
+      ...updateBreedDto,
+      imageUrl: updateBreedDto.imageUrl !== undefined 
+        ? (updateBreedDto.imageUrl?.trim() || null)
+        : undefined,
+    };
+
+    await this.breedRepository.update(id, normalizedDto);
     const updatedBreed = await this.breedRepository.findOne({ where: { id } });
     if (!updatedBreed) {
       throw new NotFoundException(`Breed with ID ${id} not found`);

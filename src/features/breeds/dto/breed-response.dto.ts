@@ -35,7 +35,7 @@ export class BreedResponseDto {
   isFeatured: boolean;
 
   @Expose()
-  imageUrl: string;
+  imageUrl: string | null;
 
   @Expose()
   createdAt: Date;

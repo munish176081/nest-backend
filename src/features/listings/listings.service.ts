@@ -635,15 +635,15 @@ export class ListingsService {
 
     // Determine the type based on listLitterOption for PUPPY_LITTER_LISTING
     let displayType = listing.type;
-    if (listing.type === ListingTypeEnum.PUPPY_LITTER_LISTING && listing.fields?.listLitterOption === 'single-puppy') {
-      displayType = ListingTypeEnum.PUPPY_LISTING;
-    }
-    else if (listing.type === ListingTypeEnum.PUPPY_LITTER_LISTING && listing.fields?.listLitterOption === 'add-individually') {
-      displayType = ListingTypeEnum.LITTER_LISTING;
-    }
-    else {
-      displayType = ListingTypeEnum.LITTER_LISTING;
-    }
+    // if (listing.type === ListingTypeEnum.PUPPY_LITTER_LISTING && listing.fields?.listLitterOption === 'single-puppy') {
+    //   displayType = ListingTypeEnum.PUPPY_LISTING;
+    // }
+    // else if (listing.type === ListingTypeEnum.PUPPY_LITTER_LISTING && listing.fields?.listLitterOption === 'add-individually') {
+    //   displayType = ListingTypeEnum.LITTER_LISTING;
+    // }
+    // else {
+    //   displayType = ListingTypeEnum.LITTER_LISTING;
+    // }
 
     return {
       id: listing.id,
