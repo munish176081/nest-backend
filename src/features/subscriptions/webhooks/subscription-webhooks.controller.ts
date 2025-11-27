@@ -22,8 +22,7 @@ import { Payment, PaymentMethodEnum, PaymentStatusEnum } from '../../payments/en
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
-// PayPal SDK doesn't have proper ES6 exports, use require
-const paypal = require('@paypal/checkout-server-sdk');
+// PayPal webhook verification is done manually via API calls
 
 @Controller('webhooks')
 export class SubscriptionWebhooksController {
@@ -572,6 +571,141 @@ export class SubscriptionWebhooksController {
     return statusMap[status] || SubscriptionStatusEnum.ACTIVE;
   }
 
+  /**
+   * Verify PayPal webhook signature manually using PayPal API
+   */
+  private async verifyPayPalWebhook(
+    headers: Record<string, string>,
+    body: any,
+    webhookId: string,
+  ): Promise<void> {
+    const https = require('https');
+    const environment = this.configService.get<string>('PAYPAL_ENVIRONMENT') || 'sandbox';
+    const hostname = environment === 'production' ? 'api-m.paypal.com' : 'api-m.sandbox.paypal.com';
+    const clientId = this.configService.get<string>('PAYPAL_CLIENT_ID');
+    const clientSecret = this.configService.get<string>('PAYPAL_SECRET');
+
+    if (!clientId || !clientSecret) {
+      throw new BadRequestException('PayPal credentials not configured');
+    }
+
+    // Get access token
+    const accessToken = await this.getPayPalAccessToken();
+
+    // Prepare verification request body
+    const verificationBody = {
+      auth_algo: headers['paypal-auth-algo'],
+      cert_url: headers['paypal-cert-url'],
+      transmission_id: headers['paypal-transmission-id'],
+      transmission_sig: headers['paypal-transmission-sig'],
+      transmission_time: headers['paypal-transmission-time'],
+      webhook_id: webhookId,
+      webhook_event: body,
+    };
+
+    return new Promise((resolve, reject) => {
+      const postData = JSON.stringify(verificationBody);
+      const options = {
+        hostname,
+        path: '/v1/notifications/verify-webhook-signature',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Length': Buffer.byteLength(postData),
+        },
+      };
+
+      const req = https.request(options, (res: any) => {
+        let data = '';
+
+        res.on('data', (chunk: Buffer) => {
+          data += chunk.toString();
+        });
+
+        res.on('end', () => {
+          try {
+            const response = JSON.parse(data);
+            if (response.verification_status === 'SUCCESS') {
+              this.logger.debug('✅ PayPal webhook signature verified successfully');
+              resolve();
+            } else {
+              this.logger.error(`❌ PayPal webhook verification failed: ${response.verification_status}`);
+              reject(new BadRequestException(`Webhook verification failed: ${response.verification_status}`));
+            }
+          } catch (error: any) {
+            this.logger.error(`❌ Error parsing PayPal verification response: ${error.message}`);
+            reject(new BadRequestException(`Webhook verification failed: ${error.message}`));
+          }
+        });
+      });
+
+      req.on('error', (error: Error) => {
+        this.logger.error(`❌ Error verifying PayPal webhook: ${error.message}`);
+        reject(new BadRequestException(`Webhook verification failed: ${error.message}`));
+      });
+
+      req.write(postData);
+      req.end();
+    });
+  }
+
+  /**
+   * Get PayPal access token for API calls
+   */
+  private async getPayPalAccessToken(): Promise<string> {
+    const https = require('https');
+    const environment = this.configService.get<string>('PAYPAL_ENVIRONMENT') || 'sandbox';
+    const hostname = environment === 'production' ? 'api-m.paypal.com' : 'api-m.sandbox.paypal.com';
+    const clientId = this.configService.get<string>('PAYPAL_CLIENT_ID');
+    const clientSecret = this.configService.get<string>('PAYPAL_SECRET');
+
+    if (!clientId || !clientSecret) {
+      throw new BadRequestException('PayPal credentials not configured');
+    }
+
+    return new Promise((resolve, reject) => {
+      const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+      const options = {
+        hostname,
+        path: '/v1/oauth2/token',
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      };
+
+      const req = https.request(options, (res: any) => {
+        let data = '';
+
+        res.on('data', (chunk: Buffer) => {
+          data += chunk.toString();
+        });
+
+        res.on('end', () => {
+          try {
+            const response = JSON.parse(data);
+            if (response.access_token) {
+              resolve(response.access_token);
+            } else {
+              reject(new Error('Failed to get PayPal access token'));
+            }
+          } catch (error: any) {
+            reject(new Error(`Error parsing PayPal token response: ${error.message}`));
+          }
+        });
+      });
+
+      req.on('error', (error: Error) => {
+        reject(error);
+      });
+
+      req.write('grant_type=client_credentials');
+      req.end();
+    });
+  }
+
   private async updateListingExpiration(listingId: string, expiresAt: Date) {
     try {
       this.logger.log(`📅 [UPDATE_EXPIRATION] Updating listing ${listingId} expiration to ${expiresAt.toISOString()}`);
@@ -630,23 +764,8 @@ export class SubscriptionWebhooksController {
     }
 
     try {
-      // Verify webhook signature
-      const verifyRequest = new paypal.notifications.WebhooksVerifyRequest();
-      verifyRequest.requestBody({
-        auth_algo: headers['paypal-auth-algo'],
-        cert_url: headers['paypal-cert-url'],
-        transmission_id: headers['paypal-transmission-id'],
-        transmission_sig: headers['paypal-transmission-sig'],
-        transmission_time: headers['paypal-transmission-time'],
-        webhook_id: webhookId,
-        webhook_event: req.body,
-      });
-
-      const verificationResponse = await paypalClient.execute(verifyRequest);
-
-      if (verificationResponse.result.verification_status !== 'SUCCESS') {
-        throw new BadRequestException('Webhook signature verification failed');
-      }
+      // Verify webhook signature using PayPal API
+      await this.verifyPayPalWebhook(headers, req.body, webhookId);
     } catch (err: any) {
       this.logger.error(`PayPal webhook verification failed: ${err.message}`);
       this.paymentLogsService.logError({
