@@ -592,6 +592,21 @@ export class SubscriptionWebhooksController {
     // Get access token
     const accessToken = await this.getPayPalAccessToken();
 
+    // Check for required headers
+    const requiredHeaders = [
+      'paypal-auth-algo',
+      'paypal-cert-url',
+      'paypal-transmission-id',
+      'paypal-transmission-sig',
+      'paypal-transmission-time',
+    ];
+
+    const missingHeaders = requiredHeaders.filter(h => !headers[h]);
+    if (missingHeaders.length > 0) {
+      this.logger.error(`❌ Missing required PayPal webhook headers: ${missingHeaders.join(', ')}`);
+      throw new BadRequestException(`Missing required webhook headers: ${missingHeaders.join(', ')}`);
+    }
+
     // Prepare verification request body
     const verificationBody = {
       auth_algo: headers['paypal-auth-algo'],
@@ -602,6 +617,12 @@ export class SubscriptionWebhooksController {
       webhook_id: webhookId,
       webhook_event: body,
     };
+
+    this.logger.debug('🔍 Verifying PayPal webhook with:', {
+      webhook_id: webhookId,
+      transmission_id: headers['paypal-transmission-id'],
+      has_body: !!body,
+    });
 
     return new Promise((resolve, reject) => {
       const postData = JSON.stringify(verificationBody);
@@ -625,24 +646,49 @@ export class SubscriptionWebhooksController {
 
         res.on('end', () => {
           try {
+            // Log response for debugging
+            this.logger.debug(`📥 PayPal verification response status: ${res.statusCode}`);
+            this.logger.debug(`📥 PayPal verification response body: ${data.substring(0, 500)}`);
+
+            if (res.statusCode !== 200) {
+              const errorMsg = `PayPal API returned status ${res.statusCode}: ${data}`;
+              this.logger.error(`❌ ${errorMsg}`);
+              reject(new BadRequestException(errorMsg));
+              return;
+            }
+
             const response = JSON.parse(data);
             if (response.verification_status === 'SUCCESS') {
               this.logger.debug('✅ PayPal webhook signature verified successfully');
               resolve();
             } else {
-              this.logger.error(`❌ PayPal webhook verification failed: ${response.verification_status}`);
-              reject(new BadRequestException(`Webhook verification failed: ${response.verification_status}`));
+              const status = response.verification_status || 'UNKNOWN';
+              const errorDetails = response.error_details || response.message || 'No details';
+              this.logger.error(`❌ PayPal webhook verification failed: ${status}`, {
+                verification_status: status,
+                error_details: errorDetails,
+                full_response: response,
+              });
+              reject(new BadRequestException(`Webhook verification failed: ${status} - ${errorDetails}`));
             }
           } catch (error: any) {
-            this.logger.error(`❌ Error parsing PayPal verification response: ${error.message}`);
-            reject(new BadRequestException(`Webhook verification failed: ${error.message}`));
+            const errorMsg = error?.message || error?.toString() || 'Unknown parsing error';
+            this.logger.error(`❌ Error parsing PayPal verification response: ${errorMsg}`, {
+              raw_response: data,
+              error: error,
+            });
+            reject(new BadRequestException(`Webhook verification failed: ${errorMsg}`));
           }
         });
       });
 
       req.on('error', (error: Error) => {
-        this.logger.error(`❌ Error verifying PayPal webhook: ${error.message}`);
-        reject(new BadRequestException(`Webhook verification failed: ${error.message}`));
+        const errorMsg = error?.message || error?.toString() || 'Unknown network error';
+        this.logger.error(`❌ Error verifying PayPal webhook: ${errorMsg}`, {
+          error: error,
+          stack: error?.stack,
+        });
+        reject(new BadRequestException(`Webhook verification failed: ${errorMsg}`));
       });
 
       req.write(postData);
@@ -685,19 +731,41 @@ export class SubscriptionWebhooksController {
 
         res.on('end', () => {
           try {
+            if (res.statusCode !== 200) {
+              const errorMsg = `PayPal token API returned status ${res.statusCode}: ${data}`;
+              this.logger.error(`❌ ${errorMsg}`);
+              reject(new Error(errorMsg));
+              return;
+            }
+
             const response = JSON.parse(data);
             if (response.access_token) {
+              this.logger.debug('✅ PayPal access token obtained successfully');
               resolve(response.access_token);
             } else {
-              reject(new Error('Failed to get PayPal access token'));
+              const errorMsg = response.error_description || response.error || 'Unknown error';
+              this.logger.error(`❌ Failed to get PayPal access token: ${errorMsg}`, {
+                response: response,
+              });
+              reject(new Error(`Failed to get PayPal access token: ${errorMsg}`));
             }
           } catch (error: any) {
-            reject(new Error(`Error parsing PayPal token response: ${error.message}`));
+            const errorMsg = error?.message || error?.toString() || 'Unknown parsing error';
+            this.logger.error(`❌ Error parsing PayPal token response: ${errorMsg}`, {
+              raw_response: data,
+              error: error,
+            });
+            reject(new Error(`Error parsing PayPal token response: ${errorMsg}`));
           }
         });
       });
 
       req.on('error', (error: Error) => {
+        const errorMsg = error?.message || error?.toString() || 'Unknown network error';
+        this.logger.error(`❌ Network error getting PayPal token: ${errorMsg}`, {
+          error: error,
+          stack: error?.stack,
+        });
         reject(error);
       });
 
@@ -763,17 +831,49 @@ export class SubscriptionWebhooksController {
       throw new BadRequestException('PayPal not configured');
     }
 
-    try {
-      // Verify webhook signature using PayPal API
-      await this.verifyPayPalWebhook(headers, req.body, webhookId);
-    } catch (err: any) {
-      this.logger.error(`PayPal webhook verification failed: ${err.message}`);
-      this.paymentLogsService.logError({
-        provider: 'paypal',
-        error: err instanceof Error ? err : new Error(err.message),
-        context: { webhookHeaders: Object.keys(headers) },
-      });
-      throw new BadRequestException(`Webhook verification failed: ${err.message}`);
+    // Log received headers for debugging
+    this.logger.debug('📥 PayPal webhook headers received:', {
+      headerKeys: Object.keys(headers),
+      paypalHeaders: {
+        'paypal-auth-algo': headers['paypal-auth-algo'] || headers['Paypal-Auth-Algo'],
+        'paypal-cert-url': headers['paypal-cert-url'] || headers['Paypal-Cert-Url'],
+        'paypal-transmission-id': headers['paypal-transmission-id'] || headers['Paypal-Transmission-Id'],
+        'paypal-transmission-sig': headers['paypal-transmission-sig'] || headers['Paypal-Transmission-Sig'],
+        'paypal-transmission-time': headers['paypal-transmission-time'] || headers['Paypal-Transmission-Time'],
+      },
+    });
+
+    // Skip verification in development mode if SKIP_PAYPAL_WEBHOOK_VERIFICATION is set
+    const skipVerification = this.configService.get<string>('SKIP_PAYPAL_WEBHOOK_VERIFICATION') === 'true';
+    const nodeEnv = this.configService.get<string>('NODE_ENV') || 'development';
+    
+    if (skipVerification || nodeEnv === 'development') {
+      this.logger.warn('⚠️ [DEV MODE] Skipping PayPal webhook verification');
+    } else {
+      try {
+        // Normalize headers (PayPal may send with different casing)
+        const normalizedHeaders: Record<string, string> = {};
+        Object.keys(headers).forEach(key => {
+          const lowerKey = key.toLowerCase();
+          normalizedHeaders[lowerKey] = headers[key];
+        });
+
+        // Verify webhook signature using PayPal API
+        await this.verifyPayPalWebhook(normalizedHeaders, req.body, webhookId);
+      } catch (err: any) {
+        const errorMsg = err?.message || err?.toString() || 'Unknown verification error';
+        this.logger.error(`PayPal webhook verification failed: ${errorMsg}`, {
+          error: err,
+          stack: err?.stack,
+          headers: Object.keys(headers),
+        });
+        this.paymentLogsService.logError({
+          provider: 'paypal',
+          error: err instanceof Error ? err : new Error(errorMsg),
+          context: { webhookHeaders: Object.keys(headers), errorMessage: errorMsg },
+        });
+        throw new BadRequestException(`Webhook verification failed: ${errorMsg}`);
+      }
     }
 
     const event = req.body;
