@@ -475,6 +475,23 @@ export class ListingsRepository {
       queryBuilder.andWhere('listing.id != :excludeId', { excludeId: queryDto.excludeId });
     }
 
+    // Exclude listings with subscriptions that have amount = 128 AND includes_featured = true
+    // This filters out listings with $128 featured subscriptions
+    queryBuilder.andWhere(
+      `NOT EXISTS (
+        SELECT 1 FROM subscriptions subscription
+        WHERE subscription.listing_id = listing.id
+        AND subscription.amount = :excludeAmount
+        AND subscription.includes_featured = true
+        AND subscription.status = :subscriptionStatus
+        AND subscription.current_period_end > NOW()
+      )`,
+      {
+        excludeAmount: 128,
+        subscriptionStatus: SubscriptionStatusEnum.ACTIVE,
+      }
+    );
+
     return queryBuilder;
   }
 } 
