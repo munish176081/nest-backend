@@ -14,6 +14,7 @@ export class QueryListingDto {
   @IsOptional()
   @IsArray()
   @IsEnum(ListingTypeEnum, { each: true })
+  @Transform(({ value }) => Array.isArray(value) ? value : [value].filter(Boolean))
   types?: ListingTypeEnum[];
 
   @IsOptional()

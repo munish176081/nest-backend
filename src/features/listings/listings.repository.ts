@@ -131,8 +131,11 @@ export class ListingsRepository {
       const priceTypeConditions = priceTypes.map(priceType => {
         switch (priceType) {
           case 'price_on_request':
-            // Listings with no price or pricingOption set to 'priceOnRequest'
-            return '(listing.price IS NULL OR listing.fields->>\'pricingOption\' = \'priceOnRequest\')';
+            // Only show listings that are EXPLICITLY marked as price on request
+            // Exclude listings that have a price (in listing.price OR fields.startingPrice)
+            // Exclude WANTED_LISTING type (they have budgets, not prices)
+            // Exclude OTHER_SERVICES without startingPrice (incomplete data, not price on request)
+            return '(listing.fields->>\'pricingOption\' = \'priceOnRequest\')';
           case 'price_range':
             // Listings with pricingOption set to 'displayPriceRange' and both minPrice and maxPrice
             return 'listing.fields->>\'pricingOption\' = \'displayPriceRange\' AND ' +
@@ -333,9 +336,12 @@ export class ListingsRepository {
       queryBuilder.andWhere('listing.status = :status', { status: queryDto.status });
     }
 
-    // Breed filter
+    // Breed filter - check both direct breed field and breed relation
     if (queryDto.breed) {
-      queryBuilder.andWhere('listing.breed ILIKE :breed', { breed: `%${queryDto.breed}%` });
+      queryBuilder.andWhere(
+        '(listing.breed ILIKE :breed OR breed.name ILIKE :breed)',
+        { breed: `%${queryDto.breed}%` }
+      );
     }
 
     // Location filter
@@ -348,39 +354,99 @@ export class ListingsRepository {
       queryBuilder.andWhere('listing.fields->>\'gender\' = :gender', { gender: queryDto.gender });
     }
 
-    // Price range
-    if (queryDto.minPrice !== undefined) {
-      queryBuilder.andWhere('listing.price >= :minPrice', { minPrice: queryDto.minPrice });
+    // Price type filter - support both single priceType and multiple priceTypes
+    const priceTypes = queryDto.priceTypes || (queryDto.priceType ? [queryDto.priceType] : []);
+    if (priceTypes.length > 0) {
+      const priceTypeConditions = priceTypes.map(priceType => {
+        switch (priceType) {
+          case 'price_on_request':
+            // Only show listings that are EXPLICITLY marked as price on request
+            // Exclude listings that have a price (in listing.price OR fields.startingPrice)
+            // Exclude WANTED_LISTING type (they have budgets, not prices)
+            // Exclude OTHER_SERVICES without startingPrice (incomplete data, not price on request)
+            return '(listing.fields->>\'pricingOption\' = \'priceOnRequest\')';
+          case 'price_range':
+            // Listings with pricingOption set to 'displayPriceRange' and both minPrice and maxPrice
+            return 'listing.fields->>\'pricingOption\' = \'displayPriceRange\' AND ' +
+                   'listing.fields->\'minPrice\' IS NOT NULL AND ' +
+                   'listing.fields->\'maxPrice\' IS NOT NULL';
+          case 'price_available':
+            // Listings with a fixed price (not null) and not using price range
+            return 'listing.price IS NOT NULL AND ' +
+                   '(listing.fields->>\'pricingOption\' IS NULL OR listing.fields->>\'pricingOption\' != \'displayPriceRange\')';
+          default:
+            return null;
+        }
+      }).filter(condition => condition !== null);
+
+      if (priceTypeConditions.length > 0) {
+        queryBuilder.andWhere(`(${priceTypeConditions.join(' OR ')})`);
+      }
     }
 
-    if (queryDto.maxPrice !== undefined) {
-      queryBuilder.andWhere('listing.price <= :maxPrice', { maxPrice: queryDto.maxPrice });
-    }
+    // Price range - handle both fixed prices and price ranges
+    // Only apply price range filter when:
+    // 1. No price types are selected (show all listings within price range), OR
+    // 2. Price types with actual prices are selected (price_available or price_range)
+    // Don't apply when only price_on_request is selected (those listings don't have prices)
+    const hasPriceTypes = priceTypes.length > 0;
+    const onlyPriceOnRequest = hasPriceTypes && priceTypes.length === 1 && priceTypes.includes('price_on_request');
+    const hasPriceRangeTypes = hasPriceTypes && (priceTypes.includes('price_available') || priceTypes.includes('price_range'));
+    
+    if ((queryDto.minPrice !== undefined || queryDto.maxPrice !== undefined) && (!hasPriceTypes || hasPriceRangeTypes)) {
+      const priceConditions: string[] = [];
+      const priceParams: Record<string, any> = {};
 
-    // Price type filter
-    if (queryDto.priceType) {
-      switch (queryDto.priceType) {
-        case 'price_on_request':
-          // Listings with no price or pricingOption set to 'priceOnRequest'
-          queryBuilder.andWhere(
-            '(listing.price IS NULL OR listing.fields->>\'pricingOption\' = \'priceOnRequest\')'
+      // Fixed price listings (price_available)
+      if (priceTypes.includes('price_available')) {
+        if (queryDto.minPrice !== undefined && queryDto.maxPrice !== undefined) {
+          priceConditions.push(
+            '(listing.price IS NOT NULL AND listing.price >= :minPrice AND listing.price <= :maxPrice AND ' +
+            '(listing.fields->>\'pricingOption\' IS NULL OR listing.fields->>\'pricingOption\' != \'displayPriceRange\'))'
           );
-          break;
-        case 'price_range':
-          // Listings with pricingOption set to 'displayPriceRange' and both minPrice and maxPrice
-          queryBuilder.andWhere(
-            'listing.fields->>\'pricingOption\' = \'displayPriceRange\' AND ' +
+          priceParams.minPrice = queryDto.minPrice;
+          priceParams.maxPrice = queryDto.maxPrice;
+        } else if (queryDto.minPrice !== undefined) {
+          priceConditions.push(
+            '(listing.price IS NOT NULL AND listing.price >= :minPrice AND ' +
+            '(listing.fields->>\'pricingOption\' IS NULL OR listing.fields->>\'pricingOption\' != \'displayPriceRange\'))'
+          );
+          priceParams.minPrice = queryDto.minPrice;
+        } else if (queryDto.maxPrice !== undefined) {
+          priceConditions.push(
+            '(listing.price IS NOT NULL AND listing.price <= :maxPrice AND ' +
+            '(listing.fields->>\'pricingOption\' IS NULL OR listing.fields->>\'pricingOption\' != \'displayPriceRange\'))'
+          );
+          priceParams.maxPrice = queryDto.maxPrice;
+        }
+      }
+
+      // Price range listings (check if the range overlaps with the filter)
+      if (priceTypes.includes('price_range')) {
+        if (queryDto.maxPrice !== undefined) {
+          priceConditions.push(
+            '(listing.fields->>\'pricingOption\' = \'displayPriceRange\' AND ' +
             'listing.fields->\'minPrice\' IS NOT NULL AND ' +
-            'listing.fields->\'maxPrice\' IS NOT NULL'
+            '(listing.fields->>\'minPrice\')::numeric <= :maxPrice)'
           );
-          break;
-        case 'price_available':
-          // Listings with a fixed price (not null) and not using price range
-          queryBuilder.andWhere(
-            'listing.price IS NOT NULL AND ' +
-            '(listing.fields->>\'pricingOption\' IS NULL OR listing.fields->>\'pricingOption\' != \'displayPriceRange\')'
+          if (!priceParams.maxPrice) {
+            priceParams.maxPrice = queryDto.maxPrice;
+          }
+        }
+        if (queryDto.minPrice !== undefined) {
+          priceConditions.push(
+            '(listing.fields->>\'pricingOption\' = \'displayPriceRange\' AND ' +
+            'listing.fields->\'maxPrice\' IS NOT NULL AND ' +
+            '(listing.fields->>\'maxPrice\')::numeric >= :minPrice)'
           );
-          break;
+          if (!priceParams.minPrice) {
+            priceParams.minPrice = queryDto.minPrice;
+          }
+        }
+      }
+
+      if (priceConditions.length > 0) {
+        queryBuilder.andWhere(`(${priceConditions.join(' OR ')})`, priceParams);
       }
     }
 
