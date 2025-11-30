@@ -603,7 +603,6 @@ export class ListingsService {
     let featuredImage = null;
     
     if (listing.type === 'PUPPY_LITTER_LISTING' && listing.fields?.individualPuppies?.length > 0) {
-      console.log('🖼️ Processing puppy litter listing for featuredImage in transformToListingResponse');
       const allPuppyImages: string[] = [];
       listing.fields.individualPuppies.forEach((puppy: any) => {
         if (puppy.puppyImages && Array.isArray(puppy.puppyImages)) {
@@ -611,10 +610,8 @@ export class ListingsService {
         }
       });
       featuredImage = allPuppyImages[0] || listing.metadata?.images?.[0] || null;
-      console.log('🖼️ Featured image set to:', featuredImage);
     } else {
       featuredImage = listing.metadata?.images?.[0] || null;
-      console.log('🖼️ Featured image set to metadata image:', featuredImage);
     }
 
     const user = await this.usersService.getUserById(listing.userId);
@@ -714,18 +711,7 @@ export class ListingsService {
       console.log('🖼️ Featured image set to:', featuredImage);
     } else {
       featuredImage = listing.metadata?.images?.[0] || null;
-      console.log('🖼️ Featured image set to metadata image:', featuredImage);
     }
-    
-    // Debug logging for user relation
-    console.log('🔍 Transform debug:', {
-      listingId: listing.id,
-      listingUserId: listing.userId,
-      userRelation: listing.user,
-      hasUser: !!listing.user,
-      userName: listing.user?.name,
-      userEmail: listing.user?.email
-    });
     
     // Transform user object to only include necessary fields
     const transformedUser = listing.user ? {
@@ -735,14 +721,6 @@ export class ListingsService {
       username: listing.user.username,
       imageUrl: listing.user.imageUrl,
     } : null;
-    
-    // Debug logging for paymentId
-    console.log('🔍 PaymentId debug for listing:', {
-      listingId: listing.id,
-      title: listing.title,
-      paymentId: listing.paymentId,
-      paymentIdType: typeof listing.paymentId,
-    });
     
     // Determine the type based on listLitterOption for PUPPY_LITTER_LISTING
     let displayType = listing.type;

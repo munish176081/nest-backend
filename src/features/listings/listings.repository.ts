@@ -477,6 +477,9 @@ export class ListingsRepository {
 
     // Exclude listings with subscriptions that have amount = 128 AND includes_featured = true
     // This filters out listings with $128 featured subscriptions
+    console.log('excludeFeaturedSubscriptions', queryDto.excludeFeaturedSubscriptions);
+    if (queryDto.excludeFeaturedSubscriptions) {
+      console.log('Excluding listings with $128 featured subscriptions');
     queryBuilder.andWhere(
       `NOT EXISTS (
         SELECT 1 FROM subscriptions subscription
@@ -491,6 +494,7 @@ export class ListingsRepository {
         subscriptionStatus: SubscriptionStatusEnum.ACTIVE,
       }
     );
+  }
 
     return queryBuilder;
   }
