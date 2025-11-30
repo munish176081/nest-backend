@@ -916,18 +916,19 @@ export class SubscriptionsService {
                 console.error(`[Sync] Failed to deactivate listing ${existingSub.listingId}:`, error);
               }
             } else if (existingSub.listingId && mappedStatus === SubscriptionStatusEnum.ACTIVE) {
-              // If subscription is active, ensure listing is also active
+              // If subscription is active, update expiration but keep listing in PENDING_REVIEW for admin approval
               try {
                 await this.listingRepository
                   .createQueryBuilder()
                   .update(Listing)
                   .set({ 
-                    isActive: true,
-                    status: ListingStatusEnum.ACTIVE,
                     expiresAt: new Date(stripeSub.current_period_end * 1000),
+                    // Don't auto-activate - keep listing in PENDING_REVIEW status for admin approval
+                    // Admin must explicitly approve the listing to change status to ACTIVE
                   })
                   .where('id = :listingId', { listingId: existingSub.listingId })
                   .execute();
+                console.log(`⏳ [Sync] Updated listing expiration, keeping in PENDING_REVIEW for admin approval: ${existingSub.listingId}`);
               } catch (error) {
                 console.error(`[Sync] Failed to update listing ${existingSub.listingId}:`, error);
               }
@@ -1625,25 +1626,41 @@ export class SubscriptionsService {
         listingId: updatedSubscription.listingId,
       });
 
-      // If subscription is now active and linked to a listing, activate the listing
+      // If subscription is now active and linked to a listing, change DRAFT to PENDING_REVIEW and update expiration
       if (
         updatedSubscription.status === SubscriptionStatusEnum.ACTIVE &&
         updatedSubscription.listingId
       ) {
         try {
-          await this.listingRepository
-            .createQueryBuilder()
-            .update(Listing)
-            .set({
-              isActive: true,
-              status: ListingStatusEnum.ACTIVE,
+          // First check the current status
+          const listing = await this.listingRepository.findOne({
+            where: { id: updatedSubscription.listingId },
+          });
+
+          if (listing) {
+            const updateData: Partial<Listing> = {
               expiresAt: updatedSubscription.currentPeriodEnd,
-            })
-            .where('id = :listingId', { listingId: updatedSubscription.listingId })
-            .execute();
-          console.log('✅ [Subscription] Activated listing:', updatedSubscription.listingId);
+            };
+
+            // If listing is in DRAFT status, change it to PENDING_REVIEW for admin approval
+            if (listing.status === ListingStatusEnum.DRAFT) {
+              updateData.status = ListingStatusEnum.PENDING_REVIEW;
+              updateData.isActive = false;
+              console.log('⏳ [Subscription] Changing listing from DRAFT to PENDING_REVIEW for admin approval:', updatedSubscription.listingId);
+            } else {
+              // For other statuses, don't change status - just update expiration
+              console.log('⏳ [Subscription] Updated listing expiration, keeping status as:', listing.status);
+            }
+
+            await this.listingRepository
+              .createQueryBuilder()
+              .update(Listing)
+              .set(updateData)
+              .where('id = :listingId', { listingId: updatedSubscription.listingId })
+              .execute();
+          }
         } catch (error) {
-          console.error('❌ [Subscription] Error activating listing:', error);
+          console.error('❌ [Subscription] Error updating listing:', error);
           // Don't throw - subscription is already updated
         }
       }

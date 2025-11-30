@@ -87,8 +87,8 @@ export class ListingsService {
       location: createListingDto.location,
       expiresAt,
       startedOrRenewedAt: new Date(),
-      status: createListingDto.status || ListingStatusEnum.ACTIVE,
-      isActive: createListingDto.status === ListingStatusEnum.DRAFT ? false : true,
+      status: createListingDto.status || ListingStatusEnum.PENDING_REVIEW,
+      isActive: (createListingDto.status === ListingStatusEnum.DRAFT || createListingDto.status === ListingStatusEnum.PENDING_REVIEW || !createListingDto.status) ? false : true,
       seoData: createListingDto.seoData,
       motherInfo: createListingDto.motherInfo,
       fatherInfo: createListingDto.fatherInfo,
@@ -416,7 +416,7 @@ export class ListingsService {
     includeDrafts?: boolean;
   }): Promise<ListingSummaryDto[]> {
     const listings = await this.listingsRepository.findByUserId(userId, options);
-    return listings.map(listing => this.transformToListingSummary(listing));
+    return listings.map(listing => this.transformToListingSummary(listing as any));
   }
 
   async searchListings(searchDto: SearchListingDto): Promise<PaginatedListingsResponseDto> {
@@ -450,6 +450,22 @@ export class ListingsService {
         metadataImagesCount: listing.metadata?.images?.length
       });
     });
+
+    return {
+      data: result.listings.map(listing => this.transformToListingSummary(listing)),
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      totalPages: result.totalPages,
+      hasNext: result.page < result.totalPages,
+      hasPrev: result.page > 1,
+    };
+  }
+
+  async getAdminListings(queryDto: QueryListingDto): Promise<PaginatedListingsResponseDto> {
+    console.log('📋 [Admin] getAdminListings called with queryDto:', queryDto);
+    const result = await this.listingsRepository.findAdminListings(queryDto);
+    console.log('📋 [Admin] Found listings count:', result.listings.length);
 
     return {
       data: result.listings.map(listing => this.transformToListingSummary(listing)),
@@ -756,6 +772,7 @@ export class ListingsService {
       subscriptionId: listing.subscriptionId || null,
       expiresAt: listing.expiresAt,
       isActive: listing.isActive,
+      subscriptionRenewalDate: (listing as any).subscriptionRenewalDate || null,
     };
     
     return result;
@@ -918,5 +935,53 @@ export class ListingsService {
         // Keep isActive = true so listing is still visible
       });
     }
+  }
+
+  /**
+   * Admin: Approve a listing (change status from PENDING_REVIEW to ACTIVE)
+   */
+  async approveListing(listingId: string): Promise<ListingResponseDto> {
+    const listing = await this.listingsRepository.findById(listingId);
+
+    if (!listing) {
+      throw new NotFoundException('Listing not found');
+    }
+
+    if (listing.status !== ListingStatusEnum.PENDING_REVIEW) {
+      throw new BadRequestException(`Listing is not in PENDING_REVIEW status. Current status: ${listing.status}`);
+    }
+
+    const updateData: Partial<Listing> = {
+      status: ListingStatusEnum.ACTIVE,
+      isActive: true,
+    };
+
+    const updatedListing = await this.listingsRepository.update(listingId, updateData);
+    return this.transformToListingResponse(updatedListing);
+  }
+
+  /**
+   * Admin: Reject a listing (change status to SUSPENDED)
+   */
+  async rejectListing(listingId: string, reason?: string): Promise<ListingResponseDto> {
+    const listing = await this.listingsRepository.findById(listingId);
+
+    if (!listing) {
+      throw new NotFoundException('Listing not found');
+    }
+
+    if (listing.status !== ListingStatusEnum.PENDING_REVIEW) {
+      throw new BadRequestException(`Listing is not in PENDING_REVIEW status. Current status: ${listing.status}`);
+    }
+
+    const updateData: Partial<Listing> = {
+      status: ListingStatusEnum.SUSPENDED,
+      isActive: false,
+      suspensionReason: reason || 'Listing rejected by admin',
+      suspendedAt: new Date(),
+    };
+
+    const updatedListing = await this.listingsRepository.update(listingId, updateData);
+    return this.transformToListingResponse(updatedListing);
   }
 } 

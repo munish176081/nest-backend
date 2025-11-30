@@ -18,6 +18,7 @@ import { ListingsService } from './listings.service';
 import { CreateListingDto, UpdateListingDto, QueryListingDto, SearchListingDto } from './dto';
 import { ListingResponseDto, ListingSummaryDto, PaginatedListingsResponseDto } from './dto/response-listing.dto';
 import { LoggedInGuard } from '../../middleware/LoggedInGuard';
+import { AdminGuard } from '../../middleware/AdminGuard';
 import { Serialize } from '../../transformers/serialize.interceptor';
 
 @Controller('listings')
@@ -204,5 +205,34 @@ export class ListingsController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ListingResponseDto> {
     return await this.listingsService.syncListingSubscriptionStatus(req.user.id, id);
+  }
+
+  // Admin: Approve listing (changes status from PENDING_REVIEW to ACTIVE)
+  @UseGuards(LoggedInGuard, AdminGuard)
+  @Post(':id/approve')
+  @Serialize(ListingResponseDto)
+  async approveListing(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ListingResponseDto> {
+    return await this.listingsService.approveListing(id);
+  }
+
+  // Admin: Reject listing (changes status to SUSPENDED)
+  @UseGuards(LoggedInGuard, AdminGuard)
+  @Post(':id/reject')
+  @Serialize(ListingResponseDto)
+  async rejectListing(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { reason?: string },
+  ): Promise<ListingResponseDto> {
+    return await this.listingsService.rejectListing(id, body.reason);
+  }
+
+  // Admin: Get all listings (including PENDING_REVIEW and other statuses)
+  @UseGuards(LoggedInGuard, AdminGuard)
+  @Get('admin/all')
+  @Serialize(PaginatedListingsResponseDto)
+  async getAdminListings(@Query() queryDto: QueryListingDto): Promise<PaginatedListingsResponseDto> {
+    return await this.listingsService.getAdminListings(queryDto);
   }
 } 

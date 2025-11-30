@@ -384,7 +384,7 @@ export class SubscriptionWebhooksController {
             await this.subscriptionRepository.save(subscription);
             this.logger.log(`✅ [PAYMENT_SUCCEEDED] Linked subscription ${subscriptionId} to listing ${listingIdFromMetadata}`);
             
-            // Update listing expiration and activate it
+            // Update listing expiration but keep it in PENDING_REVIEW status for admin approval
             const expirationDate = new Date(stripeSubscription.current_period_end * 1000);
             this.logger.log(`📅 [PAYMENT_SUCCEEDED] Updating listing expiration to: ${expirationDate.toISOString()}`);
             await this.updateListingExpiration(
@@ -392,22 +392,9 @@ export class SubscriptionWebhooksController {
               expirationDate,
             );
             
-            // Activate listing if it's not already active
-            if (!listing.isActive || listing.status !== ListingStatusEnum.ACTIVE) {
-              this.logger.log(`🔄 [PAYMENT_SUCCEEDED] Activating listing (current: isActive=${listing.isActive}, status=${listing.status})`);
-              await this.listingRepository
-                .createQueryBuilder()
-                .update(Listing)
-                .set({
-                  isActive: true,
-                  status: ListingStatusEnum.ACTIVE,
-                })
-                .where('id = :listingId', { listingId: listingIdFromMetadata })
-                .execute();
-              this.logger.log(`✅ [PAYMENT_SUCCEEDED] Activated listing ${listingIdFromMetadata}`);
-            } else {
-              this.logger.log(`ℹ️ [PAYMENT_SUCCEEDED] Listing already active, skipping activation`);
-            }
+            // Don't auto-activate listing - keep it in PENDING_REVIEW status for admin approval
+            // Admin must explicitly approve the listing to change status to ACTIVE
+            this.logger.log(`⏳ [PAYMENT_SUCCEEDED] Listing ${listingIdFromMetadata} remains in ${listing.status} status, awaiting admin approval`);
           } else {
             this.logger.warn(`⚠️ [PAYMENT_SUCCEEDED] Listing not found or doesn't belong to user: ${listingIdFromMetadata}`);
           }
@@ -1295,7 +1282,7 @@ export class SubscriptionWebhooksController {
       currency,
     );
 
-    // Activate listing if it exists and is in DRAFT status
+    // Update listing status from DRAFT to PENDING_REVIEW after payment (don't auto-activate)
     if (subscription.listingId) {
       try {
         const listing = await this.listingRepository.findOne({
@@ -1303,11 +1290,11 @@ export class SubscriptionWebhooksController {
         });
 
         if (listing) {
-          // If listing is in DRAFT status, activate it
-          if (listing.status === ListingStatusEnum.DRAFT || !listing.isActive) {
+          // If listing is in DRAFT status, change to PENDING_REVIEW for admin approval
+          if (listing.status === ListingStatusEnum.DRAFT) {
             const updateData: Partial<Listing> = {
-              status: ListingStatusEnum.ACTIVE,
-              isActive: true,
+              status: ListingStatusEnum.PENDING_REVIEW,
+              isActive: false, // Keep inactive until admin approves
             };
 
             // Update expiration if provided
@@ -1322,9 +1309,16 @@ export class SubscriptionWebhooksController {
               .where('id = :listingId', { listingId: subscription.listingId })
               .execute();
 
-            this.logger.log(`✅ [PayPal Payment Completed] Activated draft listing: ${subscription.listingId}`);
+            this.logger.log(`⏳ [PayPal Payment Completed] Changed listing from DRAFT to PENDING_REVIEW, awaiting admin approval: ${subscription.listingId}`);
+          } else if (listing.status === ListingStatusEnum.PENDING_REVIEW && event.resource?.billing_info?.next_billing_time) {
+            // Listing is already in PENDING_REVIEW, just update expiration
+            await this.updateListingExpiration(
+              subscription.listingId,
+              new Date(event.resource.billing_info.next_billing_time),
+            );
+            this.logger.log(`⏳ [PayPal Payment Completed] Updated listing expiration, keeping in PENDING_REVIEW: ${subscription.listingId}`);
           } else if (event.resource?.billing_info?.next_billing_time) {
-            // Listing is already active, just update expiration
+            // For other statuses, just update expiration
             await this.updateListingExpiration(
               subscription.listingId,
               new Date(event.resource.billing_info.next_billing_time),
@@ -1334,7 +1328,7 @@ export class SubscriptionWebhooksController {
           this.logger.warn(`⚠️ [PayPal Payment Completed] Listing not found: ${subscription.listingId}`);
         }
       } catch (error) {
-        this.logger.error(`❌ [PayPal Payment Completed] Error activating listing ${subscription.listingId}:`, error);
+        this.logger.error(`❌ [PayPal Payment Completed] Error updating listing ${subscription.listingId}:`, error);
       }
     }
   }

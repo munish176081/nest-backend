@@ -35,28 +35,56 @@ export class ListingsRepository {
     status?: ListingStatusEnum;
     includeExpired?: boolean;
     includeDrafts?: boolean;
-  }): Promise<Listing[]> {
-    const query = this.listingRepository.createQueryBuilder('listing')
+  }): Promise<(Listing & { subscriptionRenewalDate?: Date })[]> {
+    const listings = await this.listingRepository
+      .createQueryBuilder('listing')
       .leftJoinAndSelect('listing.user', 'user')
       .leftJoinAndSelect('listing.breedRelation', 'breed')
-      .where('listing.userId = :userId', { userId });
+      .where('listing.userId = :userId', { userId })
+      .getMany();
 
     // Always exclude deleted listings unless specifically requested
-    query.andWhere('listing.status != :deleted', { deleted: ListingStatusEnum.DELETED });
+    let filteredListings = listings.filter(l => l.status !== ListingStatusEnum.DELETED);
 
     if (options?.status) {
-      query.andWhere('listing.status = :status', { status: options.status });
+      filteredListings = filteredListings.filter(l => l.status === options.status);
     }
 
     if (!options?.includeExpired) {
-      query.andWhere('(listing.expiresAt IS NULL OR listing.expiresAt > NOW())');
+      filteredListings = filteredListings.filter(l => !l.expiresAt || l.expiresAt > new Date());
     }
 
     if (!options?.includeDrafts) {
-      query.andWhere('listing.status != :draft', { draft: ListingStatusEnum.DRAFT });
+      filteredListings = filteredListings.filter(l => l.status !== ListingStatusEnum.DRAFT);
     }
 
-    return await query.orderBy('listing.createdAt', 'DESC').getMany();
+    // Fetch subscription renewal dates for listings with subscriptions
+    const listingIds = filteredListings
+      .filter(l => l.subscriptionId)
+      .map(l => l.subscriptionId);
+
+    if (listingIds.length > 0) {
+      const subscriptions = await this.subscriptionRepository.find({
+        where: { id: In(listingIds), status: SubscriptionStatusEnum.ACTIVE },
+        select: ['id', 'currentPeriodEnd'],
+      });
+
+      const subscriptionMap = new Map(
+        subscriptions.map(s => [s.id, s.currentPeriodEnd])
+      );
+
+      // Add renewal date to listings
+      filteredListings = filteredListings.map(listing => ({
+        ...listing,
+        subscriptionRenewalDate: listing.subscriptionId 
+          ? subscriptionMap.get(listing.subscriptionId) 
+          : undefined,
+      }));
+    }
+
+    return filteredListings.sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   }
 
   async findActiveListings(queryDto: QueryListingDto): Promise<{
@@ -74,6 +102,35 @@ export class ListingsRepository {
     // Debug: Log the generated SQL
     console.log('🔍 Generated SQL:', queryBuilder.getSql());
     console.log('🔍 Query parameters:', queryBuilder.getParameters());
+    
+    const [listings, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .orderBy(`listing.${sortBy}`, sortOrder)
+      .getManyAndCount();
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      listings,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
+  }
+
+  async findAdminListings(queryDto: QueryListingDto): Promise<{
+    listings: Listing[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'DESC' } = queryDto;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.buildAdminQueryBuilder(queryDto);
     
     const [listings, total] = await queryBuilder
       .skip(skip)
@@ -495,6 +552,82 @@ export class ListingsRepository {
       }
     );
   }
+
+    return queryBuilder;
+  }
+
+  private buildAdminQueryBuilder(queryDto: QueryListingDto): SelectQueryBuilder<Listing> {
+    const queryBuilder = this.listingRepository.createQueryBuilder('listing')
+      .leftJoinAndSelect('listing.user', 'user')
+      .leftJoinAndSelect('listing.breedRelation', 'breed');
+
+    // Admin can see all statuses - only filter by status if explicitly provided
+    if (queryDto.status) {
+      queryBuilder.andWhere('listing.status = :status', { status: queryDto.status });
+    }
+    // No default status filter for admin - shows all statuses including PENDING_REVIEW
+
+    // Don't filter by isActive for admin - they need to see all listings
+    // Admin can see inactive listings too
+
+    // Expired filter - only apply if explicitly requested
+    if (!queryDto.includeExpired) {
+      queryBuilder.andWhere('(listing.expiresAt IS NULL OR listing.expiresAt > NOW())');
+    }
+
+    // Search
+    if (queryDto.search) {
+      queryBuilder.andWhere(
+        '(listing.title ILIKE :search OR listing.description ILIKE :search OR listing.breed ILIKE :search OR listing.location ILIKE :search)',
+        { search: `%${queryDto.search}%` }
+      );
+    }
+
+    // Type filter
+    if (queryDto.type) {
+      queryBuilder.andWhere('listing.type = :type', { type: queryDto.type });
+    }
+
+    // Types filter (multiple types)
+    if (queryDto.types && queryDto.types.length > 0) {
+      queryBuilder.andWhere('listing.type IN (:...types)', { types: queryDto.types });
+    }
+
+    // Category filter
+    if (queryDto.category) {
+      queryBuilder.andWhere('listing.category = :category', { category: queryDto.category });
+    }
+
+    // Breed filter - check both direct breed field and breed relation
+    if (queryDto.breed) {
+      queryBuilder.andWhere(
+        '(listing.breed ILIKE :breed OR breed.name ILIKE :breed)',
+        { breed: `%${queryDto.breed}%` }
+      );
+    }
+
+    // Location filter
+    if (queryDto.location) {
+      queryBuilder.andWhere('listing.location ILIKE :location', { location: `%${queryDto.location}%` });
+    }
+
+    // Gender filter (for stud/bitch listings)
+    if (queryDto.gender) {
+      queryBuilder.andWhere('listing.fields->>\'gender\' = :gender', { gender: queryDto.gender });
+    }
+
+    // User filter
+    if (queryDto.userId) {
+      queryBuilder.andWhere('listing.userId = :userId', { userId: queryDto.userId });
+    }
+
+    // Exclude specific listing ID
+    if (queryDto.excludeId) {
+      queryBuilder.andWhere('listing.id != :excludeId', { excludeId: queryDto.excludeId });
+    }
+
+    // Exclude deleted listings
+    queryBuilder.andWhere('listing.status != :deleted', { deleted: ListingStatusEnum.DELETED });
 
     return queryBuilder;
   }

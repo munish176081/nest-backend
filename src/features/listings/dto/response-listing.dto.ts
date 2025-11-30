@@ -194,6 +194,9 @@ export class ListingSummaryDto {
 
   @Expose()
   isActive?: boolean;
+
+  @Expose()
+  subscriptionRenewalDate?: Date;
 }
 
 export class PaginatedListingsResponseDto {
