@@ -1631,6 +1631,7 @@ export class SubscriptionsService {
         updatedSubscription.status === SubscriptionStatusEnum.ACTIVE &&
         updatedSubscription.listingId
       ) {
+        console.log('🔔 [Subscription] confirmSubscriptionPayment - Subscription is ACTIVE, checking listing...');
         try {
           // First check the current status
           const listing = await this.listingRepository.findOne({
@@ -1638,6 +1639,13 @@ export class SubscriptionsService {
           });
 
           if (listing) {
+            console.log('📋 [Subscription] confirmSubscriptionPayment - Listing found - BEFORE UPDATE:', {
+              listingId: listing.id,
+              currentStatus: listing.status,
+              isActive: listing.isActive,
+              expiresAt: listing.expiresAt,
+            });
+
             const updateData: Partial<Listing> = {
               expiresAt: updatedSubscription.currentPeriodEnd,
             };
@@ -1646,23 +1654,51 @@ export class SubscriptionsService {
             if (listing.status === ListingStatusEnum.DRAFT) {
               updateData.status = ListingStatusEnum.PENDING_REVIEW;
               updateData.isActive = false;
-              console.log('⏳ [Subscription] Changing listing from DRAFT to PENDING_REVIEW for admin approval:', updatedSubscription.listingId);
+              console.log('⏳ [Subscription] confirmSubscriptionPayment - DECISION: Changing listing from DRAFT to PENDING_REVIEW for admin approval');
+              console.log('⏳ [Subscription] confirmSubscriptionPayment - Update data:', JSON.stringify(updateData, null, 2));
+            } else if (listing.status === ListingStatusEnum.EXPIRED) {
+              // If listing is EXPIRED, reactivate it to PENDING_REVIEW for admin approval
+              updateData.status = ListingStatusEnum.PENDING_REVIEW;
+              updateData.isActive = false;
+              console.log('🔄 [Subscription] confirmSubscriptionPayment - DECISION: Reactivating expired listing, changing from EXPIRED to PENDING_REVIEW for admin approval');
+              console.log('🔄 [Subscription] confirmSubscriptionPayment - Update data:', JSON.stringify(updateData, null, 2));
             } else {
               // For other statuses, don't change status - just update expiration
-              console.log('⏳ [Subscription] Updated listing expiration, keeping status as:', listing.status);
+              console.log('⏳ [Subscription] confirmSubscriptionPayment - DECISION: Updated listing expiration, keeping status as:', listing.status);
+              console.log('⏳ [Subscription] confirmSubscriptionPayment - Update data:', JSON.stringify(updateData, null, 2));
             }
 
-            await this.listingRepository
-              .createQueryBuilder()
-              .update(Listing)
-              .set(updateData)
-              .where('id = :listingId', { listingId: updatedSubscription.listingId })
-              .execute();
+            if (Object.keys(updateData).length > 0) {
+              console.log('💾 [Subscription] confirmSubscriptionPayment - Executing database update...');
+              await this.listingRepository
+                .createQueryBuilder()
+                .update(Listing)
+                .set(updateData)
+                .where('id = :listingId', { listingId: updatedSubscription.listingId })
+                .execute();
+              
+              // Verify the update
+              const updatedListing = await this.listingRepository.findOne({
+                where: { id: updatedSubscription.listingId },
+              });
+              
+              console.log('✅ [Subscription] confirmSubscriptionPayment - Listing updated - AFTER UPDATE:', {
+                listingId: updatedListing?.id,
+                newStatus: updatedListing?.status,
+                newIsActive: updatedListing?.isActive,
+                newExpiresAt: updatedListing?.expiresAt,
+              });
+            }
+          } else {
+            console.warn('⚠️ [Subscription] confirmSubscriptionPayment - Listing not found:', updatedSubscription.listingId);
           }
         } catch (error) {
-          console.error('❌ [Subscription] Error updating listing:', error);
+          console.error('❌ [Subscription] confirmSubscriptionPayment - Error updating listing:', error);
+          console.error('❌ [Subscription] confirmSubscriptionPayment - Error stack:', error instanceof Error ? error.stack : 'No stack trace');
           // Don't throw - subscription is already updated
         }
+      } else {
+        console.log('ℹ️ [Subscription] confirmSubscriptionPayment - Subscription status is not ACTIVE or has no listingId. Status:', updatedSubscription.status, 'ListingId:', updatedSubscription.listingId);
       }
 
       return updatedSubscription;

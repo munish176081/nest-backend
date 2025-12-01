@@ -205,6 +205,13 @@ export class ListingsService {
   }
 
   async updateListing(userId: string, listingId: string, updateListingDto: UpdateListingDto): Promise<ListingResponseDto> {
+    console.log('🔔 [Listings Service] updateListing - START');
+    console.log('🔔 [Listings Service] updateListing - Input:', {
+      listingId,
+      userId,
+      updateListingDto: JSON.stringify(updateListingDto, null, 2),
+    });
+    
     const listing = await this.listingsRepository.findById(listingId);
 
     if (!listing) {
@@ -214,6 +221,13 @@ export class ListingsService {
     if (listing.userId !== userId) {
       throw new ForbiddenException('You can only update your own listings');
     }
+    
+    console.log('📋 [Listings Service] updateListing - Listing BEFORE UPDATE:', {
+      listingId: listing.id,
+      currentStatus: listing.status,
+      isActive: listing.isActive,
+      subscriptionId: listing.subscriptionId,
+    });
 
     // Process dynamic fields if they're being updated
     let processedFields = listing.fields;
@@ -272,7 +286,25 @@ export class ListingsService {
       subscriptionId: updateListingDto.subscriptionId,
     };
 
+    // Handle status update if provided
+    if (updateListingDto.status !== undefined) {
+      updateData.status = updateListingDto.status;
+      console.log('📊 [Listings Service] updateListing - Status update requested:', {
+        newStatus: updateListingDto.status,
+        currentStatus: listing.status,
+      });
+    }
+
+    console.log('💾 [Listings Service] updateListing - Update data to be applied:', JSON.stringify(updateData, null, 2));
+
     const updatedListing = await this.listingsRepository.update(listingId, updateData);
+    
+    console.log('✅ [Listings Service] updateListing - Listing AFTER UPDATE:', {
+      listingId: updatedListing.id,
+      newStatus: updatedListing.status,
+      newIsActive: updatedListing.isActive,
+      newSubscriptionId: updatedListing.subscriptionId,
+    });
     
     // If subscriptionId was provided, link the subscription to the listing
     if (updateListingDto.subscriptionId) {
@@ -301,11 +333,27 @@ export class ListingsService {
           });
           
           subscription.listingId = listingId;
+          
+          // Get current listing status before updating
+          const currentListing = await this.listingsRepository.findById(listingId);
+          const currentStatus = currentListing?.status;
+          
+          console.log('📊 [Listings Service] updateListing - Current listing status before subscription link:', currentStatus);
+          
           // Update expiration based on subscription period
+          const expirationUpdate: Partial<Listing> = {};
           if (subscription.currentPeriodEnd) {
-            await this.listingsRepository.update(listingId, { expiresAt: subscription.currentPeriodEnd });
+            expirationUpdate.expiresAt = subscription.currentPeriodEnd;
             console.log('📅 Updated listing expiration to:', subscription.currentPeriodEnd);
           }
+          
+          // IMPORTANT: Do NOT set status to ACTIVE here, even if subscription is ACTIVE
+          // The status should be set by the frontend (PENDING_REVIEW) or by webhook handlers
+          // Only update expiration, not status
+          if (Object.keys(expirationUpdate).length > 0) {
+            await this.listingsRepository.update(listingId, expirationUpdate);
+          }
+          
           await this.subscriptionRepository.save(subscription);
           console.log('✅ Subscription linked to listing successfully (update)');
           
@@ -317,6 +365,10 @@ export class ListingsService {
             });
             console.log('✅ Updated listing.subscriptionId to database subscription ID:', subscription.id);
           }
+          
+          // Log final status to verify it wasn't changed
+          const finalListing = await this.listingsRepository.findById(listingId);
+          console.log('📊 [Listings Service] updateListing - Final listing status after subscription link:', finalListing?.status);
         } else {
           console.warn('⚠️ Subscription not found with subscriptionId (tried both database ID and Stripe ID):', updateListingDto.subscriptionId);
         }
@@ -716,7 +768,6 @@ export class ListingsService {
     let featuredImage = null;
     
     if (listing.type === 'PUPPY_LITTER_LISTING' && listing.fields?.individualPuppies?.length > 0) {
-      console.log('🖼️ Processing puppy litter listing for featuredImage');
       const allPuppyImages: string[] = [];
       listing.fields.individualPuppies.forEach((puppy: any) => {
         if (puppy.puppyImages && Array.isArray(puppy.puppyImages)) {
@@ -724,7 +775,6 @@ export class ListingsService {
         }
       });
       featuredImage = allPuppyImages[0] || listing.metadata?.images?.[0] || null;
-      console.log('🖼️ Featured image set to:', featuredImage);
     } else {
       featuredImage = listing.metadata?.images?.[0] || null;
     }
@@ -823,12 +873,28 @@ export class ListingsService {
             };
             await this.listingsRepository.update(listingId, updateData);
           } else if (updatedSubscription.status === SubscriptionStatusEnum.ACTIVE) {
-            // If subscription is active, ensure listing is active
+            // If subscription is active, update expiration but DON'T auto-activate listing
+            // Listing should remain in PENDING_REVIEW until admin approves it
+            // Only update expiration date, not status
             const updateData: Partial<Listing> = {
-              isActive: true,
-              status: ListingStatusEnum.ACTIVE,
               expiresAt: updatedSubscription.currentPeriodEnd,
             };
+            
+            // Only update status if listing is in DRAFT or EXPIRED (needs admin approval)
+            // Don't change status if it's already PENDING_REVIEW or ACTIVE
+            if (listing.status === ListingStatusEnum.DRAFT) {
+              updateData.status = ListingStatusEnum.PENDING_REVIEW;
+              updateData.isActive = false;
+              console.log('⏳ [Sync] Changing listing from DRAFT to PENDING_REVIEW for admin approval');
+            } else if (listing.status === ListingStatusEnum.EXPIRED) {
+              updateData.status = ListingStatusEnum.PENDING_REVIEW;
+              updateData.isActive = false;
+              console.log('🔄 [Sync] Reactivating expired listing to PENDING_REVIEW for admin approval');
+            } else {
+              // For other statuses (PENDING_REVIEW, ACTIVE, etc.), just update expiration
+              console.log('⏳ [Sync] Updated listing expiration, keeping status as:', listing.status);
+            }
+            
             await this.listingsRepository.update(listingId, updateData);
           }
         }

@@ -764,10 +764,25 @@ export class SubscriptionWebhooksController {
   private async updateListingExpiration(listingId: string, expiresAt: Date) {
     try {
       this.logger.log(`📅 [UPDATE_EXPIRATION] Updating listing ${listingId} expiration to ${expiresAt.toISOString()}`);
+      
+      // Check current listing status to handle EXPIRED listings
+      const listing = await this.listingRepository.findOne({
+        where: { id: listingId },
+      });
+
+      const updateData: Partial<Listing> = { expiresAt };
+
+      // If listing is EXPIRED, reactivate it to PENDING_REVIEW for admin approval
+      if (listing && listing.status === ListingStatusEnum.EXPIRED) {
+        updateData.status = ListingStatusEnum.PENDING_REVIEW;
+        updateData.isActive = false;
+        this.logger.log(`🔄 [UPDATE_EXPIRATION] Reactivating expired listing, changing from EXPIRED to PENDING_REVIEW for admin approval`);
+      }
+
       await this.listingRepository
         .createQueryBuilder()
         .update(Listing)
-        .set({ expiresAt })
+        .set(updateData)
         .where('id = :listingId', { listingId })
         .execute();
       this.logger.log(`✅ [UPDATE_EXPIRATION] Listing expiration updated successfully`);
@@ -866,7 +881,16 @@ export class SubscriptionWebhooksController {
     const event = req.body;
     const eventType = event.event_type;
 
-    // Log webhook received
+    // Log webhook received with full details
+    this.logger.log(`🔔 [PayPal Webhook] Received event: ${eventType}`, {
+      eventId: event.id,
+      subscriptionId: event.resource?.id,
+      eventType,
+      resourceStatus: event.resource?.status,
+      resourceId: event.resource?.id,
+      fullEvent: JSON.stringify(event, null, 2),
+    });
+
     this.paymentLogsService.logWebhookReceived({
       provider: 'paypal',
       eventType,
@@ -957,10 +981,13 @@ export class SubscriptionWebhooksController {
     const subscriptionId = event.resource?.id;
     if (!subscriptionId) {
       this.logger.warn('⚠️ [PayPal Subscription Activated] No subscription ID in event');
+      this.logger.warn('⚠️ [PayPal Subscription Activated] Event data:', JSON.stringify(event, null, 2));
       return;
     }
 
+    this.logger.log(`🔔 [PayPal Subscription Activated] ========== START ==========`);
     this.logger.log(`🔔 [PayPal Subscription Activated] Processing subscription: ${subscriptionId}`);
+    this.logger.log(`🔔 [PayPal Subscription Activated] Full event data:`, JSON.stringify(event, null, 2));
 
     // Get subscription from database before updating to check if payment record exists
     const existingSubscription = await this.subscriptionRepository.findOne({
@@ -1046,47 +1073,110 @@ export class SubscriptionWebhooksController {
     // Activate listing if it exists and is in DRAFT status
     if (subscription.listingId) {
       try {
+        this.logger.log(`📋 [PayPal Subscription Activated] Fetching listing: ${subscription.listingId}`);
         const listing = await this.listingRepository.findOne({
           where: { id: subscription.listingId },
         });
 
         if (listing) {
-          // If listing is in DRAFT status, activate it
-          if (listing.status === ListingStatusEnum.DRAFT || !listing.isActive) {
-            const updateData: Partial<Listing> = {
-              status: ListingStatusEnum.ACTIVE,
-              isActive: true,
-            };
+          this.logger.log(`📋 [PayPal Subscription Activated] Listing found - BEFORE UPDATE:`, {
+            listingId: listing.id,
+            currentStatus: listing.status,
+            isActive: listing.isActive,
+            expiresAt: listing.expiresAt,
+          });
 
-            // Update expiration if provided
-            if (event.resource?.billing_info?.next_billing_time) {
-              updateData.expiresAt = new Date(event.resource.billing_info.next_billing_time);
-            }
+          // Update listing expiration and status
+          const updateData: Partial<Listing> = {};
 
+          // Update expiration if provided
+          if (event.resource?.billing_info?.next_billing_time) {
+            updateData.expiresAt = new Date(event.resource.billing_info.next_billing_time);
+            this.logger.log(`📅 [PayPal Subscription Activated] Will update expiration to: ${updateData.expiresAt}`);
+          }
+
+          // Check if listing was recently created (within last 10 minutes) - indicates it's a new listing that needs admin approval
+          const listingAge = Date.now() - new Date(listing.createdAt).getTime();
+          const isRecentlyCreated = listingAge < 10 * 60 * 1000; // 10 minutes
+          const hasNoPublishedAt = !listing.publishedAt; // Not yet approved by admin
+          
+          this.logger.log(`📊 [PayPal Subscription Activated] Listing metadata:`, {
+            listingAge: `${Math.round(listingAge / 1000)}s`,
+            isRecentlyCreated,
+            hasNoPublishedAt,
+            publishedAt: listing.publishedAt,
+          });
+
+          // If listing is in DRAFT status, change it to PENDING_REVIEW for admin approval
+          if (listing.status === ListingStatusEnum.DRAFT) {
+            updateData.status = ListingStatusEnum.PENDING_REVIEW;
+            updateData.isActive = false;
+            this.logger.log(`⏳ [PayPal Subscription Activated] DECISION: Changing listing from DRAFT to PENDING_REVIEW for admin approval`);
+            this.logger.log(`⏳ [PayPal Subscription Activated] Update data:`, JSON.stringify(updateData, null, 2));
+          } else if (listing.status === ListingStatusEnum.EXPIRED) {
+            // If listing is EXPIRED, reactivate it to PENDING_REVIEW for admin approval
+            updateData.status = ListingStatusEnum.PENDING_REVIEW;
+            updateData.isActive = false;
+            this.logger.log(`🔄 [PayPal Subscription Activated] DECISION: Reactivating expired listing, changing from EXPIRED to PENDING_REVIEW for admin approval`);
+            this.logger.log(`🔄 [PayPal Subscription Activated] Update data:`, JSON.stringify(updateData, null, 2));
+          } else if (listing.status === ListingStatusEnum.ACTIVE && isRecentlyCreated && hasNoPublishedAt) {
+            // CRITICAL FIX: If listing is ACTIVE but was recently created and not yet published (approved),
+            // it means something incorrectly set it to ACTIVE. Change it to PENDING_REVIEW for admin approval.
+            updateData.status = ListingStatusEnum.PENDING_REVIEW;
+            updateData.isActive = false;
+            this.logger.log(`🔧 [PayPal Subscription Activated] DECISION: Listing is ACTIVE but recently created and not published. Changing to PENDING_REVIEW for admin approval`);
+            this.logger.log(`🔧 [PayPal Subscription Activated] Update data:`, JSON.stringify(updateData, null, 2));
+          } else if (listing.status === ListingStatusEnum.PENDING_REVIEW && event.resource?.billing_info?.next_billing_time) {
+            // Listing is already in PENDING_REVIEW, just update expiration
+            this.logger.log(`⏳ [PayPal Subscription Activated] DECISION: Updated listing expiration, keeping in PENDING_REVIEW`);
+            this.logger.log(`⏳ [PayPal Subscription Activated] Update data:`, JSON.stringify(updateData, null, 2));
+          } else if (event.resource?.billing_info?.next_billing_time) {
+            // For other statuses, just update expiration
+            this.logger.log(`⏳ [PayPal Subscription Activated] DECISION: Updated listing expiration, keeping status as: ${listing.status}`);
+            this.logger.log(`⏳ [PayPal Subscription Activated] Update data:`, JSON.stringify(updateData, null, 2));
+          } else {
+            this.logger.log(`ℹ️ [PayPal Subscription Activated] DECISION: No update needed. Listing status: ${listing.status}, isActive: ${listing.isActive}`);
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            this.logger.log(`💾 [PayPal Subscription Activated] Executing database update...`);
             await this.listingRepository
               .createQueryBuilder()
               .update(Listing)
               .set(updateData)
               .where('id = :listingId', { listingId: subscription.listingId })
               .execute();
-
-            this.logger.log(`✅ [PayPal Subscription Activated] Activated draft listing: ${subscription.listingId}`);
-          } else if (event.resource?.billing_info?.next_billing_time) {
-            // Listing is already active, just update expiration
-            await this.updateListingExpiration(
-              subscription.listingId,
-              new Date(event.resource.billing_info.next_billing_time),
-            );
+            
+            // Verify the update
+            const updatedListing = await this.listingRepository.findOne({
+              where: { id: subscription.listingId },
+            });
+            
+            this.logger.log(`✅ [PayPal Subscription Activated] Listing updated - AFTER UPDATE:`, {
+              listingId: updatedListing?.id,
+              newStatus: updatedListing?.status,
+              newIsActive: updatedListing?.isActive,
+              newExpiresAt: updatedListing?.expiresAt,
+            });
+            
+            if (updateData.status) {
+              this.logger.log(`✅ [PayPal Subscription Activated] Listing status updated to ${updateData.status}: ${subscription.listingId}`);
+            }
+          } else {
+            this.logger.log(`ℹ️ [PayPal Subscription Activated] No database update performed (updateData is empty)`);
           }
         } else {
           this.logger.warn(`⚠️ [PayPal Subscription Activated] Listing not found: ${subscription.listingId}`);
         }
       } catch (error) {
         this.logger.error(`❌ [PayPal Subscription Activated] Error activating listing ${subscription.listingId}:`, error);
+        this.logger.error(`❌ [PayPal Subscription Activated] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
       }
     } else {
       this.logger.warn(`⚠️ [PayPal Subscription Activated] Subscription ${subscriptionId} is active but not linked to a listing.`);
     }
+    
+    this.logger.log(`🔔 [PayPal Subscription Activated] ========== END ==========`);
   }
 
   private async handlePayPalSubscriptionCancelled(event: any) {
@@ -1128,9 +1218,19 @@ export class SubscriptionWebhooksController {
 
   private async handlePayPalSubscriptionUpdated(event: any) {
     const subscriptionId = event.resource?.id;
-    if (!subscriptionId) return;
+    if (!subscriptionId) {
+      this.logger.warn('⚠️ [PayPal Subscription Updated] No subscription ID in event');
+      this.logger.warn('⚠️ [PayPal Subscription Updated] Event data:', JSON.stringify(event, null, 2));
+      return;
+    }
+
+    this.logger.log(`🔔 [PayPal Subscription Updated] ========== START ==========`);
+    this.logger.log(`🔔 [PayPal Subscription Updated] Processing subscription: ${subscriptionId}`);
+    this.logger.log(`🔔 [PayPal Subscription Updated] Full event data:`, JSON.stringify(event, null, 2));
 
     const status = this.mapPayPalStatus(event.resource?.status);
+    this.logger.log(`📊 [PayPal Subscription Updated] Mapped status: ${status} (from PayPal status: ${event.resource?.status})`);
+    
     const subscription = await this.subscriptionsService.updateSubscriptionStatus(
       subscriptionId,
       status,
@@ -1141,6 +1241,12 @@ export class SubscriptionWebhooksController {
       false,
       { paypalSubscription: event.resource },
     );
+    
+    this.logger.log(`📊 [PayPal Subscription Updated] Subscription updated:`, {
+      subscriptionId: subscription.id,
+      listingId: subscription.listingId,
+      status: subscription.status,
+    });
 
     // Update listing based on subscription status
     if (subscription.listingId) {
@@ -1168,53 +1274,132 @@ export class SubscriptionWebhooksController {
           this.logger.error(`Failed to deactivate listing ${subscription.listingId}:`, error);
         }
       } else if (status === SubscriptionStatusEnum.ACTIVE) {
-        // If subscription is active, activate listing if it's in DRAFT status
+        // If subscription is active, update listing expiration and status
+        this.logger.log(`✅ [PayPal Subscription Updated] Subscription status is ACTIVE, checking listing...`);
         try {
+          this.logger.log(`📋 [PayPal Subscription Updated] Fetching listing: ${subscription.listingId}`);
           const listing = await this.listingRepository.findOne({
             where: { id: subscription.listingId },
           });
 
-          if (listing && (listing.status === ListingStatusEnum.DRAFT || !listing.isActive)) {
-            const updateData: Partial<Listing> = {
-              status: ListingStatusEnum.ACTIVE,
-              isActive: true,
-            };
+          if (listing) {
+            this.logger.log(`📋 [PayPal Subscription Updated] Listing found - BEFORE UPDATE:`, {
+              listingId: listing.id,
+              currentStatus: listing.status,
+              isActive: listing.isActive,
+              expiresAt: listing.expiresAt,
+            });
 
+            const updateData: Partial<Listing> = {};
+
+            // Update expiration if provided
             if (event.resource?.billing_info?.next_billing_time) {
               updateData.expiresAt = new Date(event.resource.billing_info.next_billing_time);
+              this.logger.log(`📅 [PayPal Subscription Updated] Will update expiration to: ${updateData.expiresAt}`);
             }
 
-            await this.listingRepository
-              .createQueryBuilder()
-              .update(Listing)
-              .set(updateData)
-              .where('id = :listingId', { listingId: subscription.listingId })
-              .execute();
+            // Check if listing was recently created (within last 10 minutes) - indicates it's a new listing that needs admin approval
+            const listingAge = Date.now() - new Date(listing.createdAt).getTime();
+            const isRecentlyCreated = listingAge < 10 * 60 * 1000; // 10 minutes
+            const hasNoPublishedAt = !listing.publishedAt; // Not yet approved by admin
+            
+            this.logger.log(`📊 [PayPal Subscription Updated] Listing metadata:`, {
+              listingAge: `${Math.round(listingAge / 1000)}s`,
+              isRecentlyCreated,
+              hasNoPublishedAt,
+              publishedAt: listing.publishedAt,
+            });
 
-            this.logger.log(`✅ [PayPal Subscription Updated] Activated draft listing: ${subscription.listingId}`);
-          } else if (listing && event.resource?.billing_info?.next_billing_time) {
-            // Listing is already active, just update expiration
-            await this.updateListingExpiration(
-              subscription.listingId,
-              new Date(event.resource.billing_info.next_billing_time),
-            );
+            // If listing is in DRAFT status, change it to PENDING_REVIEW for admin approval
+            if (listing.status === ListingStatusEnum.DRAFT) {
+              updateData.status = ListingStatusEnum.PENDING_REVIEW;
+              updateData.isActive = false;
+              this.logger.log(`⏳ [PayPal Subscription Updated] DECISION: Changing listing from DRAFT to PENDING_REVIEW for admin approval`);
+              this.logger.log(`⏳ [PayPal Subscription Updated] Update data:`, JSON.stringify(updateData, null, 2));
+            } else if (listing.status === ListingStatusEnum.EXPIRED) {
+              // If listing is EXPIRED, reactivate it to PENDING_REVIEW for admin approval
+              updateData.status = ListingStatusEnum.PENDING_REVIEW;
+              updateData.isActive = false;
+              this.logger.log(`🔄 [PayPal Subscription Updated] DECISION: Reactivating expired listing, changing from EXPIRED to PENDING_REVIEW for admin approval`);
+              this.logger.log(`🔄 [PayPal Subscription Updated] Update data:`, JSON.stringify(updateData, null, 2));
+            } else if (listing.status === ListingStatusEnum.ACTIVE && isRecentlyCreated && hasNoPublishedAt) {
+              // CRITICAL FIX: If listing is ACTIVE but was recently created and not yet published (approved),
+              // it means something incorrectly set it to ACTIVE. Change it to PENDING_REVIEW for admin approval.
+              updateData.status = ListingStatusEnum.PENDING_REVIEW;
+              updateData.isActive = false;
+              this.logger.log(`🔧 [PayPal Subscription Updated] DECISION: Listing is ACTIVE but recently created and not published. Changing to PENDING_REVIEW for admin approval`);
+              this.logger.log(`🔧 [PayPal Subscription Updated] Update data:`, JSON.stringify(updateData, null, 2));
+            } else if (listing.status === ListingStatusEnum.PENDING_REVIEW && event.resource?.billing_info?.next_billing_time) {
+              // Listing is already in PENDING_REVIEW, just update expiration
+              this.logger.log(`⏳ [PayPal Subscription Updated] DECISION: Updated listing expiration, keeping in PENDING_REVIEW`);
+              this.logger.log(`⏳ [PayPal Subscription Updated] Update data:`, JSON.stringify(updateData, null, 2));
+            } else if (event.resource?.billing_info?.next_billing_time) {
+              // For other statuses, just update expiration
+              this.logger.log(`⏳ [PayPal Subscription Updated] DECISION: Updated listing expiration, keeping status as: ${listing.status}`);
+              this.logger.log(`⏳ [PayPal Subscription Updated] Update data:`, JSON.stringify(updateData, null, 2));
+            } else {
+              this.logger.log(`ℹ️ [PayPal Subscription Updated] DECISION: No update needed. Listing status: ${listing.status}, isActive: ${listing.isActive}`);
+            }
+
+            if (Object.keys(updateData).length > 0) {
+              this.logger.log(`💾 [PayPal Subscription Updated] Executing database update...`);
+              await this.listingRepository
+                .createQueryBuilder()
+                .update(Listing)
+                .set(updateData)
+                .where('id = :listingId', { listingId: subscription.listingId })
+                .execute();
+              
+              // Verify the update
+              const updatedListing = await this.listingRepository.findOne({
+                where: { id: subscription.listingId },
+              });
+              
+              this.logger.log(`✅ [PayPal Subscription Updated] Listing updated - AFTER UPDATE:`, {
+                listingId: updatedListing?.id,
+                newStatus: updatedListing?.status,
+                newIsActive: updatedListing?.isActive,
+                newExpiresAt: updatedListing?.expiresAt,
+              });
+              
+              if (updateData.status) {
+                this.logger.log(`✅ [PayPal Subscription Updated] Listing status updated to ${updateData.status}: ${subscription.listingId}`);
+              }
+            } else {
+              this.logger.log(`ℹ️ [PayPal Subscription Updated] No database update performed (updateData is empty)`);
+            }
+          } else {
+            this.logger.warn(`⚠️ [PayPal Subscription Updated] Listing not found: ${subscription.listingId}`);
           }
         } catch (error) {
-          this.logger.error(`❌ [PayPal Subscription Updated] Error activating listing ${subscription.listingId}:`, error);
+          this.logger.error(`❌ [PayPal Subscription Updated] Error updating listing ${subscription.listingId}:`, error);
+          this.logger.error(`❌ [PayPal Subscription Updated] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
         }
+      } else {
+        this.logger.log(`ℹ️ [PayPal Subscription Updated] Subscription status is ${status}, not ACTIVE. Skipping listing update.`);
       }
+    } else {
+      this.logger.warn(`⚠️ [PayPal Subscription Updated] Subscription ${subscriptionId} has no listingId`);
     }
+    
+    this.logger.log(`🔔 [PayPal Subscription Updated] ========== END ==========`);
   }
 
   private async handlePayPalPaymentCompleted(event: any) {
+    this.logger.log(`🔔 [PayPal Payment Completed] ========== START ==========`);
+    this.logger.log(`🔔 [PayPal Payment Completed] Full event data:`, JSON.stringify(event, null, 2));
+    
     // Try multiple possible fields for subscription ID
     const subscriptionId = event.resource?.billing_agreement_id || 
                           event.resource?.subscription_id || 
                           event.resource?.id;
     if (!subscriptionId) {
       this.logger.warn(`⚠️ [PayPal Payment Completed] No subscription ID found in event: ${JSON.stringify(event.resource)}`);
+      this.logger.log(`🔔 [PayPal Payment Completed] ========== END (NO SUBSCRIPTION ID) ==========`);
       return;
     }
+
+    this.logger.log(`🔔 [PayPal Payment Completed] Processing subscription: ${subscriptionId}`);
 
     // Find subscription by subscriptionId (PayPal subscription ID)
     const subscription = await this.subscriptionRepository.findOne({
@@ -1223,8 +1408,15 @@ export class SubscriptionWebhooksController {
 
     if (!subscription) {
       this.logger.warn(`⚠️ [PayPal Payment Completed] Subscription not found for ID: ${subscriptionId}`);
+      this.logger.log(`🔔 [PayPal Payment Completed] ========== END (SUBSCRIPTION NOT FOUND) ==========`);
       return;
     }
+    
+    this.logger.log(`📊 [PayPal Payment Completed] Subscription found:`, {
+      subscriptionId: subscription.id,
+      listingId: subscription.listingId,
+      status: subscription.status,
+    });
 
     await this.subscriptionsService.updateSubscriptionStatus(
       subscriptionId,
@@ -1285,11 +1477,31 @@ export class SubscriptionWebhooksController {
     // Update listing status from DRAFT to PENDING_REVIEW after payment (don't auto-activate)
     if (subscription.listingId) {
       try {
+        this.logger.log(`📋 [PayPal Payment Completed] Fetching listing: ${subscription.listingId}`);
         const listing = await this.listingRepository.findOne({
           where: { id: subscription.listingId },
         });
 
         if (listing) {
+          this.logger.log(`📋 [PayPal Payment Completed] Listing found - BEFORE UPDATE:`, {
+            listingId: listing.id,
+            currentStatus: listing.status,
+            isActive: listing.isActive,
+            expiresAt: listing.expiresAt,
+          });
+
+          // Check if listing was recently created (within last 10 minutes) - indicates it's a new listing that needs admin approval
+          const listingAge = Date.now() - new Date(listing.createdAt).getTime();
+          const isRecentlyCreated = listingAge < 10 * 60 * 1000; // 10 minutes
+          const hasNoPublishedAt = !listing.publishedAt; // Not yet approved by admin
+          
+          this.logger.log(`📊 [PayPal Payment Completed] Listing metadata:`, {
+            listingAge: `${Math.round(listingAge / 1000)}s`,
+            isRecentlyCreated,
+            hasNoPublishedAt,
+            publishedAt: listing.publishedAt,
+          });
+
           // If listing is in DRAFT status, change to PENDING_REVIEW for admin approval
           if (listing.status === ListingStatusEnum.DRAFT) {
             const updateData: Partial<Listing> = {
@@ -1300,8 +1512,13 @@ export class SubscriptionWebhooksController {
             // Update expiration if provided
             if (event.resource?.billing_info?.next_billing_time) {
               updateData.expiresAt = new Date(event.resource.billing_info.next_billing_time);
+              this.logger.log(`📅 [PayPal Payment Completed] Will update expiration to: ${updateData.expiresAt}`);
             }
 
+            this.logger.log(`⏳ [PayPal Payment Completed] DECISION: Changing listing from DRAFT to PENDING_REVIEW for admin approval`);
+            this.logger.log(`⏳ [PayPal Payment Completed] Update data:`, JSON.stringify(updateData, null, 2));
+
+            this.logger.log(`💾 [PayPal Payment Completed] Executing database update...`);
             await this.listingRepository
               .createQueryBuilder()
               .update(Listing)
@@ -1309,28 +1526,105 @@ export class SubscriptionWebhooksController {
               .where('id = :listingId', { listingId: subscription.listingId })
               .execute();
 
-            this.logger.log(`⏳ [PayPal Payment Completed] Changed listing from DRAFT to PENDING_REVIEW, awaiting admin approval: ${subscription.listingId}`);
+            // Verify the update
+            const updatedListing = await this.listingRepository.findOne({
+              where: { id: subscription.listingId },
+            });
+            
+            this.logger.log(`✅ [PayPal Payment Completed] Listing updated - AFTER UPDATE:`, {
+              listingId: updatedListing?.id,
+              newStatus: updatedListing?.status,
+              newIsActive: updatedListing?.isActive,
+              newExpiresAt: updatedListing?.expiresAt,
+            });
+
+            this.logger.log(`✅ [PayPal Payment Completed] Changed listing from DRAFT to PENDING_REVIEW, awaiting admin approval: ${subscription.listingId}`);
+          } else if (listing.status === ListingStatusEnum.ACTIVE && isRecentlyCreated && hasNoPublishedAt) {
+            // CRITICAL FIX: If listing is ACTIVE but was recently created and not yet published (approved),
+            // it means something incorrectly set it to ACTIVE. Change it to PENDING_REVIEW for admin approval.
+            const updateData: Partial<Listing> = {
+              status: ListingStatusEnum.PENDING_REVIEW,
+              isActive: false,
+            };
+
+            // Update expiration if provided
+            if (event.resource?.billing_info?.next_billing_time) {
+              updateData.expiresAt = new Date(event.resource.billing_info.next_billing_time);
+              this.logger.log(`📅 [PayPal Payment Completed] Will update expiration to: ${updateData.expiresAt}`);
+            }
+
+            this.logger.log(`🔧 [PayPal Payment Completed] DECISION: Listing is ACTIVE but recently created and not published. Changing to PENDING_REVIEW for admin approval`);
+            this.logger.log(`🔧 [PayPal Payment Completed] Update data:`, JSON.stringify(updateData, null, 2));
+
+            this.logger.log(`💾 [PayPal Payment Completed] Executing database update...`);
+            await this.listingRepository
+              .createQueryBuilder()
+              .update(Listing)
+              .set(updateData)
+              .where('id = :listingId', { listingId: subscription.listingId })
+              .execute();
+
+            // Verify the update
+            const updatedListing = await this.listingRepository.findOne({
+              where: { id: subscription.listingId },
+            });
+            
+            this.logger.log(`✅ [PayPal Payment Completed] Listing updated - AFTER UPDATE:`, {
+              listingId: updatedListing?.id,
+              newStatus: updatedListing?.status,
+              newIsActive: updatedListing?.isActive,
+              newExpiresAt: updatedListing?.expiresAt,
+            });
+
+            this.logger.log(`✅ [PayPal Payment Completed] Changed listing from ACTIVE to PENDING_REVIEW, awaiting admin approval: ${subscription.listingId}`);
           } else if (listing.status === ListingStatusEnum.PENDING_REVIEW && event.resource?.billing_info?.next_billing_time) {
             // Listing is already in PENDING_REVIEW, just update expiration
+            this.logger.log(`⏳ [PayPal Payment Completed] DECISION: Updated listing expiration, keeping in PENDING_REVIEW`);
             await this.updateListingExpiration(
               subscription.listingId,
               new Date(event.resource.billing_info.next_billing_time),
             );
             this.logger.log(`⏳ [PayPal Payment Completed] Updated listing expiration, keeping in PENDING_REVIEW: ${subscription.listingId}`);
+          } else if (listing.status === ListingStatusEnum.EXPIRED && event.resource?.billing_info?.next_billing_time) {
+            // If listing is EXPIRED, reactivate it to PENDING_REVIEW for admin approval
+            const updateData: Partial<Listing> = {
+              status: ListingStatusEnum.PENDING_REVIEW,
+              isActive: false,
+              expiresAt: new Date(event.resource.billing_info.next_billing_time),
+            };
+            this.logger.log(`🔄 [PayPal Payment Completed] DECISION: Reactivating expired listing, changing from EXPIRED to PENDING_REVIEW for admin approval`);
+            this.logger.log(`🔄 [PayPal Payment Completed] Update data:`, JSON.stringify(updateData, null, 2));
+            
+            await this.listingRepository
+              .createQueryBuilder()
+              .update(Listing)
+              .set(updateData)
+              .where('id = :listingId', { listingId: subscription.listingId })
+              .execute();
+            
+            this.logger.log(`✅ [PayPal Payment Completed] Reactivated expired listing to PENDING_REVIEW: ${subscription.listingId}`);
           } else if (event.resource?.billing_info?.next_billing_time) {
             // For other statuses, just update expiration
+            this.logger.log(`⏳ [PayPal Payment Completed] DECISION: Updated listing expiration, keeping status as: ${listing.status}`);
             await this.updateListingExpiration(
               subscription.listingId,
               new Date(event.resource.billing_info.next_billing_time),
             );
+          } else {
+            this.logger.log(`ℹ️ [PayPal Payment Completed] DECISION: No update needed. Listing status: ${listing.status}, isActive: ${listing.isActive}`);
           }
         } else {
           this.logger.warn(`⚠️ [PayPal Payment Completed] Listing not found: ${subscription.listingId}`);
         }
       } catch (error) {
         this.logger.error(`❌ [PayPal Payment Completed] Error updating listing ${subscription.listingId}:`, error);
+        this.logger.error(`❌ [PayPal Payment Completed] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
       }
+    } else {
+      this.logger.warn(`⚠️ [PayPal Payment Completed] Subscription ${subscriptionId} has no listingId`);
     }
+    
+    this.logger.log(`🔔 [PayPal Payment Completed] ========== END ==========`);
   }
 
   private async handlePayPalPaymentFailed(event: any) {

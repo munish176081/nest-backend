@@ -228,8 +228,6 @@ export class SessionService {
           
           // Save the updated session back to Redis
           await this.redis.set(sessionKey, JSON.stringify(session));
-          
-          console.log(`Updated session ${sessionKey} for user ${userId}`);
         }
       }
     } catch (parseError) {

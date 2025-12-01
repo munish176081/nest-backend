@@ -190,6 +190,9 @@ export class ListingSummaryDto {
   paymentId?: string | null;
 
   @Expose()
+  subscriptionId?: string | null;
+
+  @Expose()
   expiresAt?: Date;
 
   @Expose()
