@@ -58,29 +58,51 @@ export class ListingsRepository {
       filteredListings = filteredListings.filter(l => l.status !== ListingStatusEnum.DRAFT);
     }
 
-    // Fetch subscription renewal dates for listings with subscriptions
-    const listingIds = filteredListings
+    // Fetch subscriptions linked to these listings (by listingId) to find missing subscriptionIds
+    const listingIdsForSubscriptionCheck = filteredListings.map(l => l.id);
+    const subscriptionsByListingId = await this.subscriptionRepository.find({
+      where: { listingId: In(listingIdsForSubscriptionCheck) },
+      select: ['id', 'listingId', 'currentPeriodEnd', 'status'],
+    });
+
+    // Create maps for subscription data
+    const subscriptionByListingIdMap = new Map(
+      subscriptionsByListingId.map(s => [s.listingId, s])
+    );
+    const subscriptionRenewalDateMap = new Map(
+      subscriptionsByListingId.map(s => [s.listingId, s.currentPeriodEnd])
+    );
+
+    // Also fetch subscriptions by subscriptionId for listings that already have it
+    const existingSubscriptionIds = filteredListings
       .filter(l => l.subscriptionId)
       .map(l => l.subscriptionId);
 
-    if (listingIds.length > 0) {
-      const subscriptions = await this.subscriptionRepository.find({
-        where: { id: In(listingIds), status: SubscriptionStatusEnum.ACTIVE },
+    if (existingSubscriptionIds.length > 0) {
+      const subscriptionsById = await this.subscriptionRepository.find({
+        where: { id: In(existingSubscriptionIds), status: SubscriptionStatusEnum.ACTIVE },
         select: ['id', 'currentPeriodEnd'],
       });
 
-      const subscriptionMap = new Map(
-        subscriptions.map(s => [s.id, s.currentPeriodEnd])
-      );
-
-      // Add renewal date to listings
-      filteredListings = filteredListings.map(listing => ({
-        ...listing,
-        subscriptionRenewalDate: listing.subscriptionId 
-          ? subscriptionMap.get(listing.subscriptionId) 
-          : undefined,
-      }));
+      subscriptionsById.forEach(s => {
+        subscriptionRenewalDateMap.set(s.id, s.currentPeriodEnd);
+      });
     }
+
+    // Add subscriptionId and renewal date to listings
+    filteredListings = filteredListings.map(listing => {
+      const subscription = subscriptionByListingIdMap.get(listing.id);
+      const subscriptionId = listing.subscriptionId || (subscription ? subscription.id : null);
+      const renewalDate = subscriptionId 
+        ? (subscriptionRenewalDateMap.get(listing.id) || subscriptionRenewalDateMap.get(subscriptionId))
+        : undefined;
+
+      return {
+        ...listing,
+        subscriptionId, // Populate subscriptionId if it was missing
+        subscriptionRenewalDate: renewalDate,
+      };
+    });
 
     return filteredListings.sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()

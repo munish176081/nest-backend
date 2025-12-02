@@ -384,6 +384,12 @@ export class SubscriptionWebhooksController {
             await this.subscriptionRepository.save(subscription);
             this.logger.log(`✅ [PAYMENT_SUCCEEDED] Linked subscription ${subscriptionId} to listing ${listingIdFromMetadata}`);
             
+            // Also update listing's subscriptionId if it's missing (bidirectional link)
+            if (!listing.subscriptionId) {
+              await this.listingRepository.update(listingIdFromMetadata, { subscriptionId: subscription.id });
+              this.logger.log(`✅ [PAYMENT_SUCCEEDED] Updated listing's subscriptionId to ${subscription.id}`);
+            }
+            
             // Update listing expiration but keep it in PENDING_REVIEW status for admin approval
             const expirationDate = new Date(stripeSubscription.current_period_end * 1000);
             this.logger.log(`📅 [PAYMENT_SUCCEEDED] Updating listing expiration to: ${expirationDate.toISOString()}`);
@@ -1138,6 +1144,12 @@ export class SubscriptionWebhooksController {
             this.logger.log(`ℹ️ [PayPal Subscription Activated] DECISION: No update needed. Listing status: ${listing.status}, isActive: ${listing.isActive}`);
           }
 
+          // Also update listing's subscriptionId if it's missing (bidirectional link)
+          if (!listing.subscriptionId) {
+            updateData.subscriptionId = subscription.id;
+            this.logger.log(`✅ [PayPal Subscription Activated] Will update listing's subscriptionId to ${subscription.id}`);
+          }
+
           if (Object.keys(updateData).length > 0) {
             this.logger.log(`💾 [PayPal Subscription Activated] Executing database update...`);
             await this.listingRepository
@@ -1508,6 +1520,12 @@ export class SubscriptionWebhooksController {
               status: ListingStatusEnum.PENDING_REVIEW,
               isActive: false, // Keep inactive until admin approves
             };
+
+            // Also update listing's subscriptionId if it's missing (bidirectional link)
+            if (!listing.subscriptionId) {
+              updateData.subscriptionId = subscription.id;
+              this.logger.log(`✅ [PayPal Payment Completed] Will update listing's subscriptionId to ${subscription.id}`);
+            }
 
             // Update expiration if provided
             if (event.resource?.billing_info?.next_billing_time) {
