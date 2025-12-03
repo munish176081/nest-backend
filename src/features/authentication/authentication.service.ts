@@ -28,6 +28,7 @@ import { ResetPasswordOtpDto } from './dto/reset-password-otp.dto';
 import { UsersService } from '../accounts/users.service';
 import { User } from '../accounts/entities/account.entity';
 import { ActivityLogsService } from '../accounts/activity-logs.service';
+import { RecaptchaService } from '../../common/services/recaptcha.service';
 
 @Injectable()
 export class AuthService {
@@ -45,6 +46,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly otpService: OtpService,
     private readonly dataSource: DataSource,
+    private readonly recaptchaService: RecaptchaService
   ) {
     // TODO: change below to use depency injection
     this.cache = new Redis(configService.get('redis.url'), {
@@ -163,49 +165,10 @@ export class AuthService {
     return user;
   }
 
-  async verifyRecaptcha(token: string): Promise<boolean> {
-    const secretKey = this.configService.get<string>('recaptcha.secretKey') || 
-                     this.configService.get<string>('RECAPTCHA_SECRET_KEY');
-    
-    if (!secretKey) {
-      this.logger.warn('reCAPTCHA secret key not configured. Skipping verification.');
-      return true; // Allow signup if reCAPTCHA is not configured
-    }
-
-    if (!token) {
-      throw new BadRequestException('reCAPTCHA token is required');
-    }
-
-    try {
-      const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `secret=${secretKey}&response=${token}`,
-      });
-
-      const data = await response.json();
-      
-      if (!data.success) {
-        this.logger.warn('reCAPTCHA verification failed:', data);
-        throw new BadRequestException('reCAPTCHA verification failed. Please try again.');
-      }
-
-      return true;
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      this.logger.error('Error verifying reCAPTCHA:', error);
-      throw new BadRequestException('Failed to verify reCAPTCHA. Please try again.');
-    }
-  }
-
   async signUp(signupBody: SignupDto, ip?: string, userAgent?: string) {
     // Verify reCAPTCHA if token is provided
     if (signupBody.recaptchaToken) {
-      await this.verifyRecaptcha(signupBody.recaptchaToken);
+      await this.recaptchaService.verifyRecaptcha(signupBody.recaptchaToken);
     }
     
     if (signupBody.confirmPassword !== signupBody.password) {

@@ -18,6 +18,7 @@ import { OtpService } from './otp.service';
 import { UsersModule } from '../accounts/users.module';
 import { AuthController } from './authentication.controller';
 import { AuthService } from './authentication.service';
+import { CommonModule } from '../../common/common.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AuthService } from './authentication.service';
     TypeOrmModule.forFeature([ExternalAuthAccount]),
     forwardRef(() => UsersModule),
     EmailModule,
+    CommonModule,
   ],
   controllers: [AuthController],
   providers: [

@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsOptional } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsNotEmpty } from 'class-validator';
 
 export class ContactDto {
   @IsString()
@@ -19,4 +19,8 @@ export class ContactDto {
 
   @IsString()
   message: string;
+
+  @IsString()
+  @IsNotEmpty({ message: "Please complete the reCAPTCHA verification." })
+  recaptchaToken: string;
 } 

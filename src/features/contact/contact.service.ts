@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ContactDto } from './dto/contact.dto';
 import { EmailService } from '../email/email.service';
+import { RecaptchaService } from '../../common/services/recaptcha.service';
 import { images, sendGridEmailTemplates } from '../email/templates';
 import { ConfigService } from '@nestjs/config';
 
@@ -8,9 +9,15 @@ import { ConfigService } from '@nestjs/config';
 export class ContactService {
   private readonly logger = new Logger(ContactService.name);
 
-  constructor(private readonly emailService: EmailService, private readonly configService: ConfigService) {}
+  constructor(private readonly emailService: EmailService, private readonly configService: ConfigService, private readonly recaptchaService: RecaptchaService,
+) {}
 
   async submitContactForm(contactData: ContactDto): Promise<{ message: string; success: boolean }> {
+    // Verify reCAPTCHA if token is provided
+    if (contactData.recaptchaToken) {
+      await this.recaptchaService.verifyRecaptcha(contactData.recaptchaToken);
+    }
+
     // Send notification email to admin using Postmark template
     const adminEmailResult = await this.emailService.sendEmailWithTemplate({
       recipient: this.configService.get('contact.supportEmail'),
