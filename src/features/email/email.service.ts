@@ -72,6 +72,9 @@ export class EmailService {
       'welcome-3': `${process.env.SITE_NAME} - OTP Code for Password Reset`,
       'welcome-4': `${process.env.SITE_NAME} - New Contact Form Submission`,
       'welcome-5': `We Received Your Enquiry - ${process.env.SITE_NAME}`,
+      'listing-pending-review': `${process.env.SITE_NAME} - New Listing Pending Review`,
+      'listing-approved': `Your Listing Has Been Approved - ${process.env.SITE_NAME}`,
+      'listing-approved-admin': `${process.env.SITE_NAME} - Listing Approved Confirmation`,
     };
 
     return subjectMap[templateAlias] || `Email from ${process.env.SITE_NAME}`;

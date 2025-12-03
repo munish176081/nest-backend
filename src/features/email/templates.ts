@@ -8,6 +8,9 @@ export const postmarkEmailTemplates = {
   resetPasswordWithOtp: 'welcome-3', // Reset password otp
   contactForm: 'welcome-4', // Contact form
   acknowledgment: 'welcome-5', // Acknowledge email
+  listingPendingReview: 'listing-pending-review', // Admin notification when listing is pending review
+  listingApproved: 'listing-approved', // User notification when listing is approved
+  listingApprovedAdmin: 'listing-approved-admin', // Admin confirmation when listing is approved
 };
 
 // For backward compatibility, export as sendGridEmailTemplates (deprecated)

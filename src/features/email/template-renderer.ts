@@ -23,6 +23,9 @@ export class TemplateRenderer {
       [postmarkEmailTemplates.resetPasswordWithOtp]: 'reset-password-otp.html',
       [postmarkEmailTemplates.contactForm]: 'contact-form.html',
       [postmarkEmailTemplates.acknowledgment]: 'acknowledgment.html',
+      [postmarkEmailTemplates.listingPendingReview]: 'listing-pending-review.html',
+      [postmarkEmailTemplates.listingApproved]: 'listing-approved.html',
+      [postmarkEmailTemplates.listingApprovedAdmin]: 'listing-approved-admin.html',
     };
 
     const templateFile = templateMap[templateAlias];

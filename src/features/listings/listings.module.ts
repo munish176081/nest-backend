@@ -10,6 +10,7 @@ import { AuthModule } from '../authentication/authentication.module';
 import { UsersModule } from '../accounts/users.module';
 import { BreedsModule } from '../breeds/breeds.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { EmailModule } from '../email/email.module';
 import { LoggedInGuard } from '../../middleware/LoggedInGuard';
 
 @Module({
@@ -19,6 +20,7 @@ import { LoggedInGuard } from '../../middleware/LoggedInGuard';
     forwardRef(() => UsersModule),
     BreedsModule,
     forwardRef(() => SubscriptionsModule),
+    EmailModule,
   ],
   controllers: [ListingsController],
   providers: [ListingsService, ListingsRepository, LoggedInGuard],

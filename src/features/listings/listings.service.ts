@@ -13,6 +13,9 @@ import { UsersService } from '../accounts/users.service';
 import { ActivityLogsService } from '../accounts/activity-logs.service';
 import { Payment } from '../payments/entities/payment.entity';
 import { Subscription, SubscriptionStatusEnum } from '../subscriptions/entities/subscription.entity';
+import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config';
+import { images, postmarkEmailTemplates } from '../email/templates';
 
 @Injectable()
 export class ListingsService {
@@ -30,6 +33,8 @@ export class ListingsService {
     private readonly subscriptionRepository: Repository<Subscription>,
     @InjectRepository(Listing)
     private readonly listingRepository: Repository<Listing>,
+    private readonly emailService: EmailService,
+    private readonly configService: ConfigService,
   ) { }
 
   async createListing(createListingDto: CreateListingDto, userId: string, ipAddress?: string, userAgent?: string): Promise<ListingResponseDto> {
@@ -1023,6 +1028,17 @@ export class ListingsService {
     };
 
     const updatedListing = await this.listingsRepository.update(listingId, updateData);
+    
+    // Send email notification to user
+    this.sendListingApprovedEmail(listing).catch((error) => {
+      console.error('Failed to send listing approved email to user:', error);
+    });
+
+    // Send email notification to admin (confirmation)
+    this.sendListingApprovedAdminEmail(listing).catch((error) => {
+      console.error('Failed to send listing approved email to admin:', error);
+    });
+
     return this.transformToListingResponse(updatedListing);
   }
 
@@ -1049,5 +1065,172 @@ export class ListingsService {
 
     const updatedListing = await this.listingsRepository.update(listingId, updateData);
     return this.transformToListingResponse(updatedListing);
+  }
+
+  /**
+   * Send email notification to admin when listing status changes to PENDING_REVIEW
+   */
+  async sendListingPendingReviewEmail(listing: Listing): Promise<void> {
+    try {
+      // Get user information
+      const user = listing.user || await this.usersService.getUserById(listing.userId);
+      if (!user || !user.email) {
+        console.warn(`Cannot send pending review email: User not found or has no email for listing ${listing.id}`);
+        return;
+      }
+
+      // Get admin email from config
+      const adminEmail = this.configService.get<string>('contact.supportEmail') || process.env.ADMIN_SUPPORT_EMAIL;
+      if (!adminEmail) {
+        console.warn('Cannot send pending review email: Admin email not configured');
+        return;
+      }
+
+      // Get breed name
+      const breedName = listing.breedRelation?.name || listing.fields?.breed || listing.metadata?.breed || 'N/A';
+      
+      // Get location
+      const location = listing.fields?.location || listing.metadata?.location || 'N/A';
+
+      // Get listing type display name
+      const listingTypeDisplay = this.getListingTypeDisplayName(listing.type);
+
+      // Build review URL
+      const siteUrl = this.configService.get<string>('siteUrl') || process.env.SITE_URL || 'http://localhost:3000';
+      const reviewUrl = `${siteUrl}/admin/listings`;
+
+      await this.emailService.sendEmailWithTemplate({
+        recipient: adminEmail,
+        templateAlias: postmarkEmailTemplates.listingPendingReview,
+        dynamicTemplateData: {
+          logoUrl: images.logo,
+          listingId: listing.id,
+          listingTitle: listing.title,
+          listingType: listingTypeDisplay,
+          breed: breedName,
+          location: location,
+          userName: user.name || 'Unknown User',
+          userEmail: user.email,
+          reviewUrl: reviewUrl,
+        },
+      });
+    } catch (error) {
+      console.error('Error sending pending review email:', error);
+      // Don't throw - email failure shouldn't break the flow
+    }
+  }
+
+  /**
+   * Send email notification to user when listing is approved
+   */
+  async sendListingApprovedEmail(listing: Listing): Promise<void> {
+    try {
+      // Get user information
+      const user = listing.user || await this.usersService.getUserById(listing.userId);
+      if (!user || !user.email) {
+        console.warn(`Cannot send approved email: User not found or has no email for listing ${listing.id}`);
+        return;
+      }
+
+      // Get breed name
+      const breedName = listing.breedRelation?.name || listing.fields?.breed || listing.metadata?.breed || 'N/A';
+      
+      // Get location
+      const location = listing.fields?.location || listing.metadata?.location || 'N/A';
+
+      // Get listing type display name
+      const listingTypeDisplay = this.getListingTypeDisplayName(listing.type);
+
+      // Build listing URL
+      const siteUrl = this.configService.get<string>('siteUrl') || process.env.SITE_URL || 'http://localhost:3000';
+      const listingUrl = `${siteUrl}/explore/${listing.id}`;
+
+      await this.emailService.sendEmailWithTemplate({
+        recipient: user.email,
+        templateAlias: postmarkEmailTemplates.listingApproved,
+        dynamicTemplateData: {
+          logoUrl: images.logo,
+          userName: user.name || 'User',
+          listingTitle: listing.title,
+          listingType: listingTypeDisplay,
+          breed: breedName,
+          location: location,
+          listingUrl: listingUrl,
+        },
+      });
+    } catch (error) {
+      console.error('Error sending approved email:', error);
+      // Don't throw - email failure shouldn't break the flow
+    }
+  }
+
+  /**
+   * Send email notification to admin when listing is approved (confirmation)
+   */
+  async sendListingApprovedAdminEmail(listing: Listing): Promise<void> {
+    try {
+      // Get user information
+      const user = listing.user || await this.usersService.getUserById(listing.userId);
+      if (!user) {
+        console.warn(`Cannot send approved admin email: User not found for listing ${listing.id}`);
+        return;
+      }
+
+      // Get admin email from config
+      const adminEmail = this.configService.get<string>('contact.supportEmail') || process.env.ADMIN_SUPPORT_EMAIL;
+      if (!adminEmail) {
+        console.warn('Cannot send approved admin email: Admin email not configured');
+        return;
+      }
+
+      // Get breed name
+      const breedName = listing.breedRelation?.name || listing.fields?.breed || listing.metadata?.breed || 'N/A';
+      
+      // Get location
+      const location = listing.fields?.location || listing.metadata?.location || 'N/A';
+
+      // Get listing type display name
+      const listingTypeDisplay = this.getListingTypeDisplayName(listing.type);
+
+      // Build listing URL
+      const siteUrl = this.configService.get<string>('siteUrl') || process.env.SITE_URL || 'http://localhost:3000';
+      const listingUrl = `${siteUrl}/explore/${listing.id}`;
+
+      await this.emailService.sendEmailWithTemplate({
+        recipient: adminEmail,
+        templateAlias: postmarkEmailTemplates.listingApprovedAdmin,
+        dynamicTemplateData: {
+          logoUrl: images.logo,
+          listingId: listing.id,
+          listingTitle: listing.title,
+          listingType: listingTypeDisplay,
+          breed: breedName,
+          location: location,
+          userName: user.name || 'Unknown User',
+          userEmail: user.email || 'N/A',
+          listingUrl: listingUrl,
+        },
+      });
+    } catch (error) {
+      console.error('Error sending approved admin email:', error);
+      // Don't throw - email failure shouldn't break the flow
+    }
+  }
+
+  /**
+   * Helper method to get display name for listing type
+   */
+  private getListingTypeDisplayName(type: ListingTypeEnum): string {
+    const typeMap: Record<ListingTypeEnum, string> = {
+      [ListingTypeEnum.PUPPY_LISTING]: 'Puppy Listing',
+      [ListingTypeEnum.PUPPY_LITTER_LISTING]: 'Puppy Litter Listing',
+      [ListingTypeEnum.LITTER_LISTING]: 'Litter Listing',
+      [ListingTypeEnum.STUD_LISTING]: 'Stud Listing',
+      [ListingTypeEnum.FUTURE_LISTING]: 'Future Listing',
+      [ListingTypeEnum.WANTED_LISTING]: 'Wanted Listing',
+      [ListingTypeEnum.SEMEN_LISTING]: 'Semen Listing',
+      [ListingTypeEnum.OTHER_SERVICES]: 'Other Services',
+    };
+    return typeMap[type] || type;
   }
 } 

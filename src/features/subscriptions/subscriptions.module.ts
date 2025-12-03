@@ -9,6 +9,7 @@ import { Payment } from '../payments/entities/payment.entity';
 import { PaymentLogsService } from '../payments/payment-logs.service';
 import { AuthModule } from '../authentication/authentication.module';
 import { UsersModule } from '../accounts/users.module';
+import { ListingsModule } from '../listings/listings.module';
 import { LoggedInGuard } from '../../middleware/LoggedInGuard';
 
 @Module({
@@ -16,6 +17,7 @@ import { LoggedInGuard } from '../../middleware/LoggedInGuard';
     TypeOrmModule.forFeature([Subscription, Listing, Payment]),
     AuthModule,
     forwardRef(() => UsersModule),
+    forwardRef(() => ListingsModule),
   ],
   controllers: [SubscriptionsController, SubscriptionWebhooksController],
   providers: [SubscriptionsService, PaymentLogsService, LoggedInGuard],

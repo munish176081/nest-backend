@@ -10,6 +10,8 @@ import {
   HttpStatus,
   BadRequestException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -21,6 +23,7 @@ import { Listing, ListingStatusEnum } from '../../listings/entities/listing.enti
 import { Payment, PaymentMethodEnum, PaymentStatusEnum } from '../../payments/entities/payment.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { ListingsService } from '../../listings/listings.service';
 
 // PayPal webhook verification is done manually via API calls
 
@@ -39,6 +42,8 @@ export class SubscriptionWebhooksController {
     private paymentRepository: Repository<Payment>,
     @InjectRepository(Subscription)
     private subscriptionRepository: Repository<Subscription>,
+    @Inject(forwardRef(() => ListingsService))
+    private listingsService: ListingsService,
   ) {
     const stripeSecretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
     if (stripeSecretKey) {
@@ -1173,6 +1178,19 @@ export class SubscriptionWebhooksController {
             
             if (updateData.status) {
               this.logger.log(`✅ [PayPal Subscription Activated] Listing status updated to ${updateData.status}: ${subscription.listingId}`);
+              
+              // Send email notification if status changed to PENDING_REVIEW
+              if (updateData.status === ListingStatusEnum.PENDING_REVIEW && updatedListing) {
+                const listingWithUser = await this.listingRepository.findOne({
+                  where: { id: subscription.listingId },
+                  relations: ['user', 'breedRelation'],
+                });
+                if (listingWithUser) {
+                  this.listingsService.sendListingPendingReviewEmail(listingWithUser).catch((error) => {
+                    this.logger.error(`Failed to send pending review email: ${error.message}`);
+                  });
+                }
+              }
             }
           } else {
             this.logger.log(`ℹ️ [PayPal Subscription Activated] No database update performed (updateData is empty)`);
@@ -1557,6 +1575,19 @@ export class SubscriptionWebhooksController {
             });
 
             this.logger.log(`✅ [PayPal Payment Completed] Changed listing from DRAFT to PENDING_REVIEW, awaiting admin approval: ${subscription.listingId}`);
+            
+            // Send email notification to admin
+            if (updatedListing) {
+              const listingWithUser = await this.listingRepository.findOne({
+                where: { id: subscription.listingId },
+                relations: ['user', 'breedRelation'],
+              });
+              if (listingWithUser) {
+                this.listingsService.sendListingPendingReviewEmail(listingWithUser).catch((error) => {
+                  this.logger.error(`Failed to send pending review email: ${error.message}`);
+                });
+              }
+            }
           } else if (listing.status === ListingStatusEnum.ACTIVE && isRecentlyCreated && hasNoPublishedAt) {
             // CRITICAL FIX: If listing is ACTIVE but was recently created and not yet published (approved),
             // it means something incorrectly set it to ACTIVE. Change it to PENDING_REVIEW for admin approval.
@@ -1621,6 +1652,17 @@ export class SubscriptionWebhooksController {
               .execute();
             
             this.logger.log(`✅ [PayPal Payment Completed] Reactivated expired listing to PENDING_REVIEW: ${subscription.listingId}`);
+            
+            // Send email notification to admin
+            const listingWithUser = await this.listingRepository.findOne({
+              where: { id: subscription.listingId },
+              relations: ['user', 'breedRelation'],
+            });
+            if (listingWithUser) {
+              this.listingsService.sendListingPendingReviewEmail(listingWithUser).catch((error) => {
+                this.logger.error(`Failed to send pending review email: ${error.message}`);
+              });
+            }
           } else if (event.resource?.billing_info?.next_billing_time) {
             // For other statuses, just update expiration
             this.logger.log(`⏳ [PayPal Payment Completed] DECISION: Updated listing expiration, keeping status as: ${listing.status}`);
