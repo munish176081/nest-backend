@@ -66,14 +66,14 @@ export class EmailService {
    */
   private getSubjectForTemplate(templateAlias: string): string {
     const subjectMap: Record<string, string> = {
-      'welcome': 'Verify Your Email Address',
-      'password-reset': 'Reset Your Password',
-      'welcome-1': 'Complete Your Registration',
-      'welcome-3': 'Reset Your Password - OTP Code',
-      'welcome-4': 'New Contact Form Submission',
-      'welcome-5': 'Thank You for Your Enquiry',
+      'welcome': `Welcome to ${process.env.SITE_NAME}! Verify Your Email Address`,
+      'password-reset': `Reset Your ${process.env.SITE_NAME} Password`,
+      'welcome-1': `Welcome to ${process.env.SITE_NAME}! Verify Your Email Address`,
+      'welcome-3': `${process.env.SITE_NAME} - OTP Code for Password Reset`,
+      'welcome-4': `${process.env.SITE_NAME} - New Contact Form Submission`,
+      'welcome-5': `We Received Your Enquiry - ${process.env.SITE_NAME}`,
     };
 
-    return subjectMap[templateAlias] || 'Email from Pups4Sale';
+    return subjectMap[templateAlias] || `Email from ${process.env.SITE_NAME}`;
   }
 }

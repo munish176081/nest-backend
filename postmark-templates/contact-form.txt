@@ -4,7 +4,7 @@ You have received a new contact form submission. Here are the details:
 
 Name: {{firstName}} {{lastName}}
 Email: {{email}}
-{{#phone}}Phone: {{phone}}{{/phone}}
+Phone: {{phone}}
 Subject: {{subject}}
 
 Message:
