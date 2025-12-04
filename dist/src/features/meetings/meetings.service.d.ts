@@ -1,0 +1,44 @@
+import { Repository } from 'typeorm';
+import { Meeting } from './entities/meeting.entity';
+import { CreateMeetingDto } from './dto/create-meeting.dto';
+import { UpdateMeetingDto } from './dto/update-meeting.dto';
+import { MeetingResponseDto } from './dto/meeting-response.dto';
+import { ListingsService } from '../listings/listings.service';
+import { UsersService } from '../accounts/users.service';
+import { OAuthCalendarService } from './oauth-calendar.service';
+import { UserCalendarTokensService } from './user-calendar-tokens.service';
+import { ConfigService } from '@nestjs/config';
+export declare class MeetingsService {
+    private meetingRepository;
+    private listingsService;
+    private usersService;
+    private oauthCalendarService;
+    private userCalendarTokensService;
+    private configService;
+    constructor(meetingRepository: Repository<Meeting>, listingsService: ListingsService, usersService: UsersService, oauthCalendarService: OAuthCalendarService, userCalendarTokensService: UserCalendarTokensService, configService: ConfigService);
+    createMeeting(createMeetingDto: CreateMeetingDto, userId: string, userAccessToken?: string, userRefreshToken?: string): Promise<Meeting>;
+    getUserMeetings(userId: string): Promise<MeetingResponseDto[]>;
+    getMeeting(id: string, userId: string): Promise<Meeting>;
+    updateMeeting(id: string, updateMeetingDto: UpdateMeetingDto, userId: string): Promise<Meeting>;
+    confirmMeeting(id: string, userId: string): Promise<Meeting>;
+    rejectMeeting(id: string, userId: string): Promise<Meeting>;
+    cancelMeeting(id: string, userId: string): Promise<Meeting>;
+    getListingMeetings(listingId: string, userId: string): Promise<MeetingResponseDto[]>;
+    getAvailableSlots(listingId: string, date: string, userId: string): Promise<string[]>;
+    private checkDuplicateMeeting;
+    private checkSellerAvailability;
+    private getSellerCalendarTokens;
+    getUserCalendarTokens(userId: string): Promise<{
+        access_token: string;
+        refresh_token?: string;
+    } | null>;
+    private checkCalendarAvailability;
+    findByCalendarEventId(calendarEventId: string): Promise<Meeting | null>;
+    findById(id: string): Promise<Meeting | null>;
+    updateMeetingStatus(meetingId: string, newStatus: string, reason?: string): Promise<Meeting>;
+    updateMeetingDateTime(meetingId: string, newDate: string, newTime: string): Promise<Meeting>;
+    private validateStatusTransition;
+    private generateGoogleMeetLink;
+    private determineMeetingStatusFromCalendar;
+    private getStatusChangeReason;
+}

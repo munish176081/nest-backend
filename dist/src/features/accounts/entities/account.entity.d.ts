@@ -1,0 +1,44 @@
+export type UserStatusEnum = 'not_verified' | 'suspended' | 'active';
+export type UserRoleEnum = 'user' | 'admin' | 'super_admin';
+export declare class User {
+    id: string;
+    email: string;
+    name: string;
+    username: string;
+    status: UserStatusEnum;
+    role: UserRoleEnum;
+    isSuperAdmin: boolean;
+    imageUrl?: string;
+    phone?: string;
+    bio?: string;
+    website?: string;
+    businessName?: string;
+    businessABN?: string;
+    description?: string;
+    location?: string;
+    idVerification?: {
+        governmentId: string[];
+        selfieWithId: string[];
+    };
+    email2?: string;
+    phone2?: string;
+    fax?: string;
+    address?: string;
+    address2?: string;
+    zip?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    firstName?: string;
+    lastName?: string;
+    isImportedFromCsv: boolean;
+    isProfileComplete: boolean;
+    missingRequiredFields?: string[];
+    csvOptionalFields?: Record<string, any>;
+    ip?: string;
+    hashedPassword?: string;
+    externalAccounts: any[];
+    listings: any[];
+    createdAt: string;
+    updatedAt: string;
+}
