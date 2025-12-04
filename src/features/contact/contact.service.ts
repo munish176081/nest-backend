@@ -15,10 +15,14 @@ export class ContactService {
   constructor(
     @InjectRepository(Contact)
     private readonly contactRepo: Repository<Contact>,
-    private readonly emailService: EmailService, private readonly configService: ConfigService, private readonly recaptchaService: RecaptchaService,
-) {}
+    private readonly emailService: EmailService,
+    private readonly configService: ConfigService,
+    private readonly recaptchaService: RecaptchaService,
+  ) {}
 
-  async submitContactForm(contactData: ContactDto): Promise<{ message: string; success: boolean }> {
+  async submitContactForm(
+    contactData: ContactDto,
+  ): Promise<{ message: string; success: boolean }> {
     // Verify reCAPTCHA if token is provided
     if (contactData.recaptchaToken) {
       await this.recaptchaService.verifyRecaptcha(contactData.recaptchaToken);
@@ -70,10 +74,14 @@ export class ContactService {
 
     // Log email results
     if (!adminEmailResult.success) {
-      this.logger.warn(`Failed to send admin notification email: ${adminEmailResult.error}`);
+      this.logger.warn(
+        `Failed to send admin notification email: ${adminEmailResult.error}`,
+      );
     }
     if (!userEmailResult.success) {
-      this.logger.warn(`Failed to send acknowledgment email to ${contactData.email}: ${userEmailResult.error}`);
+      this.logger.warn(
+        `Failed to send acknowledgment email to ${contactData.email}: ${userEmailResult.error}`,
+      );
     }
 
     // Always return success if at least one email was sent (or even if both failed, form was submitted)
@@ -83,7 +91,8 @@ export class ContactService {
     // If both emails failed, inform user but still return success (form was received)
     if (!adminEmailResult.success && !userEmailResult.success) {
       return {
-        message: 'Your enquiry has been received, but we encountered an issue sending confirmation emails. We will contact you shortly.',
+        message:
+          'Your enquiry has been received, but we encountered an issue sending confirmation emails. We will contact you shortly.',
         success: true,
       };
     }
@@ -92,5 +101,15 @@ export class ContactService {
       message: 'Your Enquiry has been submitted successfully!',
       success: true,
     };
+  }
+
+  async getAllEnquiries(page: number, limit: number) {
+    const [data, total] = await this.contactRepo.findAndCount({
+      skip: (page - 1) * limit,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
+
+    return { data, total, page, limit };
   }
 }
