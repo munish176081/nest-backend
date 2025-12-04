@@ -38,6 +38,7 @@ import { WishlistModule } from './features/wishlist/wishlist.module';
 import { BlogsModule } from './features/blogs/blogs.module';
 import { PaymentsModule } from './features/payments/payments.module';
 import { SubscriptionsModule } from './features/subscriptions/subscriptions.module';
+import { NewsletterModule } from "./features/newsletter/newsletter.module";
 
 
 @Module({
@@ -83,6 +84,7 @@ import { SubscriptionsModule } from './features/subscriptions/subscriptions.modu
     BlogsModule,
     PaymentsModule,
     SubscriptionsModule,
+    NewsletterModule,
   ],
   providers: [],
 })
