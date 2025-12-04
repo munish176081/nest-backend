@@ -21,6 +21,8 @@ import { BlogCategory } from './features/blogs/entities/blog-category.entity';
 import { ActivityLog } from './features/accounts/entities/activity-log.entity';
 import { Payment } from './features/payments/entities/payment.entity';
 import { Subscription } from './features/subscriptions/entities/subscription.entity';
+import { Contact } from './features/contact/entities/contact.entity';
+
 // Temporarily commented out to avoid schema conflicts
 // import { ListingType } from './features/listings/entities/listing-type.entity';
 // import { ListingFile } from './features/listings/entities/listing-file.entity';
@@ -38,8 +40,7 @@ import { WishlistModule } from './features/wishlist/wishlist.module';
 import { BlogsModule } from './features/blogs/blogs.module';
 import { PaymentsModule } from './features/payments/payments.module';
 import { SubscriptionsModule } from './features/subscriptions/subscriptions.module';
-import { NewsletterModule } from "./features/newsletter/newsletter.module";
-
+import { NewsletterModule } from './features/newsletter/newsletter.module';
 
 @Module({
   imports: [
@@ -54,11 +55,29 @@ import { NewsletterModule } from "./features/newsletter/newsletter.module";
           type: 'postgres',
           url: configService.get('dbUrl'),
           synchronize: true, // Re-enabled after fixing database
-          entities: [ExternalAuthAccount, User, Upload, Listing, Breed, BreedTypeImage, Conversation, Message, Participant, Meeting, UserCalendarTokens, Wishlist, BlogPost, BlogCategory, ActivityLog, Payment, Subscription],
+          entities: [
+            ExternalAuthAccount,
+            User,
+            Upload,
+            Listing,
+            Breed,
+            BreedTypeImage,
+            Conversation,
+            Message,
+            Participant,
+            Meeting,
+            UserCalendarTokens,
+            Wishlist,
+            BlogPost,
+            BlogCategory,
+            ActivityLog,
+            Payment,
+            Subscription,
+            Contact,
+          ],
           namingStrategy: new SnakeCaseNamingStrategy(),
           logging: false,
-    
-        
+
           // ✅ Final working setup: one ssl object only
           ssl: {
             rejectUnauthorized: false,

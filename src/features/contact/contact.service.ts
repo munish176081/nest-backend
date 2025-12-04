@@ -4,12 +4,18 @@ import { EmailService } from '../email/email.service';
 import { RecaptchaService } from '../../common/services/recaptcha.service';
 import { images, sendGridEmailTemplates } from '../email/templates';
 import { ConfigService } from '@nestjs/config';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Contact } from './entities/contact.entity';
 
 @Injectable()
 export class ContactService {
   private readonly logger = new Logger(ContactService.name);
 
-  constructor(private readonly emailService: EmailService, private readonly configService: ConfigService, private readonly recaptchaService: RecaptchaService,
+  constructor(
+    @InjectRepository(Contact)
+    private readonly contactRepo: Repository<Contact>,
+    private readonly emailService: EmailService, private readonly configService: ConfigService, private readonly recaptchaService: RecaptchaService,
 ) {}
 
   async submitContactForm(contactData: ContactDto): Promise<{ message: string; success: boolean }> {
@@ -17,6 +23,18 @@ export class ContactService {
     if (contactData.recaptchaToken) {
       await this.recaptchaService.verifyRecaptcha(contactData.recaptchaToken);
     }
+
+    // Save enquiry in DB
+    const savedEnquiry = await this.contactRepo.save({
+      firstName: contactData.firstName,
+      lastName: contactData.lastName,
+      email: contactData.email,
+      phone: contactData.phone,
+      subject: contactData.subject || 'General Inquiry',
+      message: contactData.message,
+    });
+
+    this.logger.log(`Saved enquiry ID: ${savedEnquiry.id}`);
 
     // Send notification email to admin using Postmark template
     const adminEmailResult = await this.emailService.sendEmailWithTemplate({
