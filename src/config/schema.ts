@@ -179,7 +179,7 @@ export const configConfiguration = () => {
       },
     },
     contact: {
-      supportEmail: process.env.CONTACT_SUPPORT_EMAIL,
+      supportEmail: process.env.ADMIN_SUPPORT_EMAIL,
     },
     stripe: {
       secretKey: process.env.STRIPE_SECRET_KEY,
